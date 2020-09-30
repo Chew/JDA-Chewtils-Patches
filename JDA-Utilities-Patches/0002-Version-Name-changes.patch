@@ -1,11 +1,11 @@
-From 5aa7d2fe5f7a871097db7d958e410cd131ac271f Mon Sep 17 00:00:00 2001
+From 55988f13bd4f9ab6caf13cdb06ade72b05f49fa4 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 15:02:57 -0500
 Subject: [PATCH] Version/Name changes
 
 
 diff --git a/build.gradle b/build.gradle
-index 571121f..346c078 100644
+index 571121f..c6caadf 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -22,7 +22,7 @@ plugins {
@@ -17,6 +17,15 @@ index 571121f..346c078 100644
  
  task build {
      group = 'build'
+@@ -33,7 +33,7 @@ allprojects {
+     apply plugin: 'com.jfrog.bintray'
+     apply plugin: 'com.github.johnrengelman.shadow'
+ 
+-    group = 'com.jagrosh'
++    group = 'pw.chew'
+     version = versionInfo.values().join('.')
+ 
+     ext {
 diff --git a/settings.gradle b/settings.gradle
 index 869ba6a..5783c90 100644
 --- a/settings.gradle
