@@ -1,11 +1,11 @@
-From 12624fc4c6278d55888df16c80d993330a425744 Mon Sep 17 00:00:00 2001
+From f0d66d8aaa77f64ab07f0c31a2e34def90d1de9d Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 17:07:05 -0500
 Subject: [PATCH] Fix capitalization and wording in errors
 
 
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
-index 8f1af88..6a345a4 100644
+index 8f1af88..bb014f8 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
 @@ -264,7 +264,7 @@ public abstract class Command
@@ -44,6 +44,24 @@ index 8f1af88..6a345a4 100644
                          return;
                      }
                  }
+@@ -302,7 +302,7 @@ public abstract class Command
+                 {
+                     if(!event.getMember().hasPermission(p))
+                     {
+-                        terminate(event, String.format(userMissingPermMessage, event.getClient().getError(), p.getName(), "Guild"));
++                        terminate(event, String.format(userMissingPermMessage, event.getClient().getError(), p.getName(), "server"));
+                         return;
+                     }
+                 }
+@@ -310,7 +310,7 @@ public abstract class Command
+         }
+         else if(guildOnly)
+         {
+-            terminate(event, event.getClient().getError()+" This command cannot be used in Direct messages");
++            terminate(event, event.getClient().getError()+" This command cannot be used in direct messages");
+             return;
+         }
+         
 -- 
 2.28.0
 
