@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+# Source: https://github.com/PaperMC/Waterfall/blob/master/waterfall
+
+case "$1" in
+    "rb" | "rbp" | "rebuild")
+        scripts/rebuildPatches.sh
+    ;;
+    "p" | "patch")
+        scripts/build.sh
+    ;;
+    "m" | "up" | "merge")
+        scripts/mergeUpstream.sh
+    ;;
+    "b" | "build")
+        scripts/build.sh --jar
+    ;;
+    "e" | "edit")
+        scripts/edit.sh
+    ;;
+    *)
+        echo "JDA-Chewtils build tool command. This provides a variety of commands to control the JDA-Chewtils"
+        echo "build. View below for details of the available commands."
+        echo ""
+        echo "Commands:"
+        echo "  * rb, rbp, rebuild | Rebuilds the patches"
+        echo "  * p, patch         | Applies all the patches to JDA-Utilities"
+        echo "  * m, up, merge     | Utility to aid in merging upstream"
+        echo "  * b, build         | Builds the project"
+        echo "                     | The bootstrap artifact can be found in JDA-Chewtils/bootstrap/target/"
+        echo "  * e, edit          | Runs git rebase -i for JDA-Chewtils, allowing patches to be easily modified"
+    ;;
+esac

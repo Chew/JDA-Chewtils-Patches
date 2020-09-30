@@ -1,0 +1,29 @@
+<project>
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>pw.chew</groupId>
+    <artifactId>jdachewtil-parent</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+    <packaging>pom</packaging>
+    <name>JDA-Chewtils (Parent)</name>
+
+    <properties>
+        <repo>https://jenkins.chew.pw/plugin/repository/</repo>
+        <skipTests>true</skipTests>
+    </properties>
+
+    <repositories>
+        <repository>
+            <id>chew</id>
+            <url>https://jenkins.chew.pw/plugin/repository/</url>
+        </repository>
+    </repositories>
+
+    <build>
+        <defaultGoal>install</defaultGoal>
+        <finalName>${project.artifactId}</finalName>
+    </build>
+    <modules>
+        <module>JDA-Chewtils</module>
+    </modules>
+</project>

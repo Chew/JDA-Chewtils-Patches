@@ -1,0 +1,4 @@
+[submodule "JDA-Utilities"]
+	path = JDA-Utilities
+	url = git@github.com:JDA-Applications/JDA-Utilities.git
+	branch = master
