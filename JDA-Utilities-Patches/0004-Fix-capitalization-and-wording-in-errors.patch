@@ -1,0 +1,49 @@
+From 12624fc4c6278d55888df16c80d993330a425744 Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Wed, 30 Sep 2020 17:07:05 -0500
+Subject: [PATCH] Fix capitalization and wording in errors
+
+
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+index 8f1af88..6a345a4 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+@@ -264,7 +264,7 @@ public abstract class Command
+                         }
+                         else if(!event.getSelfMember().hasPermission(vc, p))
+                         {
+-                            terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "Voice Channel"));
++                            terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "voice channel"));
+                             return;
+                         }
+                     }
+@@ -272,7 +272,7 @@ public abstract class Command
+                     {
+                         if(!event.getSelfMember().hasPermission(event.getTextChannel(), p))
+                         {
+-                            terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "Channel"));
++                            terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "channel"));
+                             return;
+                         }
+                     }
+@@ -281,7 +281,7 @@ public abstract class Command
+                 {
+                     if(!event.getSelfMember().hasPermission(p))
+                     {
+-                        terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "Guild"));
++                        terminate(event, String.format(botMissingPermMessage, event.getClient().getError(), p.getName(), "server"));
+                         return;
+                     }
+                 }
+@@ -294,7 +294,7 @@ public abstract class Command
+                 {
+                     if(!event.getMember().hasPermission(event.getTextChannel(), p))
+                     {
+-                        terminate(event, String.format(userMissingPermMessage, event.getClient().getError(), p.getName(), "Channel"));
++                        terminate(event, String.format(userMissingPermMessage, event.getClient().getError(), p.getName(), "channel"));
+                         return;
+                     }
+                 }
+-- 
+2.28.0
+
