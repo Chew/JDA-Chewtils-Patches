@@ -1,0 +1,31 @@
+From 61afb6ff6f9f5219108361081f3321b65dfd1841 Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Wed, 30 Sep 2020 14:57:39 -0500
+Subject: [PATCH] Add Menu.Builder#getItems() method
+
+
+diff --git a/menu/src/main/java/com/jagrosh/jdautilities/menu/Paginator.java b/menu/src/main/java/com/jagrosh/jdautilities/menu/Paginator.java
+index c6489ba..4e2532b 100644
+--- a/menu/src/main/java/com/jagrosh/jdautilities/menu/Paginator.java
++++ b/menu/src/main/java/com/jagrosh/jdautilities/menu/Paginator.java
+@@ -641,6 +641,17 @@ public class Paginator extends Menu
+             return this;
+         }
+ 
++        /**
++         * Gets the String list of items to paginate.
++         * <br>Useful when determining amount of items are being paginated.
++         *
++         * @return the String list
++         */
++        public List<String> getItems()
++        {
++            return strings;
++        }
++
+         /**
+          * Sets the {@link com.jagrosh.jdautilities.menu.Paginator Paginator}'s bulk-skip
+          * function to skip multiple pages using alternate forward and backwards
+-- 
+2.28.0
+
