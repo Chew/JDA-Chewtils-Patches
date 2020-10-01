@@ -1,0 +1,23 @@
+From ca84ddcdc2f38c1e0c7d27ac2f0c22ebc255860f Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Wed, 30 Sep 2020 19:26:04 -0500
+Subject: [PATCH] Fix inverted boolean This should be the opposite. Fixes
+ JDA-Applications/JDA-Utilities#114
+
+
+diff --git a/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java b/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java
+index 80bf931..108994a 100644
+--- a/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java
++++ b/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java
+@@ -83,7 +83,7 @@ public class OAuth2UserImpl implements OAuth2User
+     @Override
+     public String getEmail()
+     {
+-        if(Scope.contains(getSession().getScopes(), Scope.EMAIL))
++        if(!Scope.contains(getSession().getScopes(), Scope.EMAIL))
+             throw new MissingScopeException("get email for user", Scope.EMAIL);
+         return email;
+     }
+-- 
+2.28.0
+
