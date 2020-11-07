@@ -1,4 +1,4 @@
-From ca84ddcdc2f38c1e0c7d27ac2f0c22ebc255860f Mon Sep 17 00:00:00 2001
+From ec38b6ce5af3c50e40cd7dc6fcf26121adc6e5d9 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 19:26:04 -0500
 Subject: [PATCH] Fix inverted boolean This should be the opposite. Fixes
@@ -19,5 +19,5 @@ index 80bf931..108994a 100644
          return email;
      }
 -- 
-2.28.0
+2.23.0
 

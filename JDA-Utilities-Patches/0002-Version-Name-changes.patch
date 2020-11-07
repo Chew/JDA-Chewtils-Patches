@@ -1,18 +1,18 @@
-From 55988f13bd4f9ab6caf13cdb06ade72b05f49fa4 Mon Sep 17 00:00:00 2001
+From faae0ff447c9d2688d75a31ae2af55a4bd9ff754 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 15:02:57 -0500
 Subject: [PATCH] Version/Name changes
 
 
 diff --git a/build.gradle b/build.gradle
-index 571121f..c6caadf 100644
+index b835ea5..9482bf5 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -22,7 +22,7 @@ plugins {
      id 'com.jfrog.bintray' version '1.8.4'
  }
  
--def versionInfo = [major: '3', minor: '0', revision: '4']
+-def versionInfo = [major: '3', minor: '0', revision: '5']
 +def versionInfo = [major: '1', minor: '0', revision: '0']
  
  task build {
@@ -40,5 +40,5 @@ index 869ba6a..5783c90 100644
  include ':command'
  include ':commons'
 -- 
-2.28.0
+2.23.0
 
