@@ -1,0 +1,191 @@
+From b6f1556067c2622b861b97a54ca26905966aa1fe Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Wed, 11 Nov 2020 16:49:03 -0600
+Subject: [PATCH] Multi-prefix support
+
+
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
+index 4dd678b..292754b 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
+@@ -84,6 +84,13 @@ public interface CommandClient
+      */
+     String getAltPrefix();
+ 
++    /**
++     * Gets the array of prefixes
++     *
++     * @return A possibly-null list of prefixes
++     */
++    String[] getPrefixes();
++
+     /**
+      * Returns the visual representation of the bot's prefix. 
+      * 
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+index 98c5491..0a5b456 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+@@ -41,6 +41,7 @@ public class CommandClientBuilder
+     private String[] coOwnerIds;
+     private String prefix;
+     private String altprefix;
++    private String[] prefixes;
+     private String serverInvite;
+     private String success;
+     private String warning;
+@@ -68,7 +69,7 @@ public class CommandClientBuilder
+      */
+     public CommandClient build()
+     {
+-        CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, activity, status, serverInvite,
++        CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, prefixes, activity, status, serverInvite,
+                                                      success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), useHelp,
+                                                      shutdownAutomatically, helpConsumer, helpWord, executor, linkedCacheSize, compiler, manager);
+         if(listener!=null)
+@@ -137,6 +138,19 @@ public class CommandClientBuilder
+         this.altprefix = prefix;
+         return this;
+     }
++
++    /**
++     * Sets an array of prefixes in case it's not enough. Be careful.
++     *
++     * @param prefixes
++     *        The prefixes to use
++     *
++     * @return This builder
++     */
++    public CommandClientBuilder setPrefixes(String[] prefixes) {
++        this.prefixes = prefixes;
++        return this;
++    }
+     
+     /**
+      * Sets whether the {@link com.jagrosh.jdautilities.command.CommandClient CommandClient} will use
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandEvent.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandEvent.java
+index a9019cb..9a76e94 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandEvent.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandEvent.java
+@@ -47,6 +47,7 @@ public class CommandEvent
+     public static int MAX_MESSAGES = 2;
+     
+     private final MessageReceivedEvent event;
++    private final String prefix;
+     private String args;
+     private final CommandClient client;
+     
+@@ -58,14 +59,17 @@ public class CommandEvent
+      * 
+      * @param  event
+      *         The initial MessageReceivedEvent
++     * @param  prefix
++     *         The prefix used to execute this command
+      * @param  args
+      *         The String arguments after the command call
+      * @param  client
+      *         The {@link com.jagrosh.jdautilities.command.CommandClient CommandClient}
+      */
+-    public CommandEvent(MessageReceivedEvent event, String args, CommandClient client)
++    public CommandEvent(MessageReceivedEvent event, String prefix, String args, CommandClient client)
+     {
+         this.event = event;
++        this.prefix = prefix;
+         this.args = args == null ? "" : args;
+         this.client = client;
+     }
+@@ -85,7 +89,16 @@ public class CommandEvent
+     {
+         this.args = args;
+     }
+-    
++
++    /**
++     * Returns the prefix used when this event was raised. Useful for figuring out what people invoked.
++     *
++     * @return Never null prefix used to raise event
++     */
++    public String getPrefix() {
++        return prefix;
++    }
++
+     /**
+      * Returns the underlying {@link net.dv8tion.jda.api.events.message.MessageReceivedEvent MessageReceivedEvent}
+      * for this CommandEvent.
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+index 77abf63..bc2e503 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+@@ -73,6 +73,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private final String[] coOwnerIds;
+     private final String prefix;
+     private final String altprefix;
++    private final String[] prefixes;
+     private final String serverInvite;
+     private final HashMap<String, Integer> commandIndex;
+     private final ArrayList<Command> commands;
+@@ -95,7 +96,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private CommandListener listener = null;
+     private int totalGuilds;
+ 
+-    public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, Activity activity, OnlineStatus status, String serverInvite,
++    public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, String[] prefixes, Activity activity, OnlineStatus status, String serverInvite,
+                              String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands,
+                              boolean useHelp, boolean shutdownAutomatically, Consumer<CommandEvent> helpConsumer, String helpWord, ScheduledExecutorService executor,
+                              int linkedCacheSize, AnnotatedModuleCompiler compiler, GuildSettingsManager manager)
+@@ -120,6 +121,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+         this.coOwnerIds = coOwnerIds;
+         this.prefix = prefix==null || prefix.isEmpty() ? DEFAULT_PREFIX : prefix;
+         this.altprefix = altprefix==null || altprefix.isEmpty() ? null : altprefix;
++        this.prefixes = prefixes==null || prefixes.length == 0 ? null : prefixes;
+         this.textPrefix = prefix;
+         this.activity = activity;
+         this.status = status;
+@@ -384,6 +386,11 @@ public class CommandClientImpl implements CommandClient, EventListener
+         return prefix;
+     }
+ 
++    @Override
++    public String[] getPrefixes() {
++        return prefixes;
++    }
++
+     @Override
+     public String getAltPrefix()
+     {
+@@ -510,6 +517,14 @@ public class CommandClientImpl implements CommandClient, EventListener
+         // Check for alternate prefix
+         if(parts == null && altprefix != null && rawContent.toLowerCase().startsWith(altprefix.toLowerCase()))
+             parts = splitOnPrefixLength(rawContent, altprefix.length());
++        // Check for prefixes
++        for (String pre : prefixes)
++        {
++            if (parts == null && rawContent.toLowerCase().startsWith(pre.toLowerCase()))
++            {
++                parts = splitOnPrefixLength(rawContent, pre.length());
++            }
++        }
+         // Check for guild specific prefixes
+         if(parts == null && settings != null)
+         {
+@@ -528,7 +543,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+         {
+             if(useHelp && parts[0].equalsIgnoreCase(helpWord))
+             {
+-                CommandEvent cevent = new CommandEvent(event, parts[1]==null ? "" : parts[1], this);
++                CommandEvent cevent = new CommandEvent(event, rawContent.split(parts[0])[0], parts[1]==null ? "" : parts[1], this);
+                 if(listener!=null)
+                     listener.onCommand(cevent, null);
+                 helpConsumer.accept(cevent); // Fire help consumer
+@@ -549,7 +564,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+ 
+                 if(command != null)
+                 {
+-                    CommandEvent cevent = new CommandEvent(event, args, this);
++                    CommandEvent cevent = new CommandEvent(event, rawContent.split(parts[0])[0], args, this);
+ 
+                     if(listener != null)
+                         listener.onCommand(cevent, command);
+-- 
+2.29.2
+
