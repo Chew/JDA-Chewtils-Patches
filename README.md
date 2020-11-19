@@ -4,12 +4,14 @@ My fork of [JDA-Applications/JDA-Utilities](https://github.com/JDA-Applications/
 
 This repo uses the patch system designed by [PaperMC](https://github.com/PaperMC).
 
+Need help? Ask in [#jda-chewtils on my Discord server](https://discord.gg/SUGVxJpg8r)
+
 ## Getting Started
 
 If you're already using JDA-Utilities, all you need to do is change the dependency.
 
 To get the version, head on over to [the jenkins site](https://jenkins.chew.pw/job/JDA-Chewtils/lastSuccessfulBuild/).
-The version will be 1.0.0_buildNumber. As of now would be `1.0.0_13`.
+The version will be 1.0.0_buildNumber. As of now would be `1.0.0_16`.
 
 Maven:
 
@@ -37,4 +39,4 @@ The same works for specific versions as well. Such as `-command` or whatever you
 
 I try to fix bugs and bring over PRs still pending upstream. Ultimately it has features I'd like to see that many others might not, but you may.
 
-I'm open to suggestions. Feel free to open an issue and I'll try to get it done.
+I'm open to suggestions. Feel free to open an issue, and I'll try to get it done.
