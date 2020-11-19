@@ -11,18 +11,18 @@ Need help? Ask in [#jda-chewtils on my Discord server](https://discord.gg/SUGVxJ
 If you're already using JDA-Utilities, all you need to do is change the dependency.
 
 To get the version, head on over to [the jenkins site](https://jenkins.chew.pw/job/JDA-Chewtils/lastSuccessfulBuild/).
-The version will be 1.0.0_buildNumber. As of now would be `1.0.0_16`.
+The version will be ![Bintray](https://img.shields.io/bintray/v/chew/projects/JDA-Chewtils?label=latest) minus the "v".
 
 Maven:
 
 ```xml
-  <dependency>
-    <groupId>pw.chew</groupId>
-    <artifactId>jda-chewtils</artifactId>
-    <version>version</version>
-    <scope>compile</scope>
-    <type>pom</type>
-  </dependency>
+<dependency>
+  <groupId>pw.chew</groupId>
+  <artifactId>jda-chewtils</artifactId>
+  <version>version</version>
+  <scope>compile</scope>
+  <type>pom</type>
+</dependency>
 ```
 
 Gradle:
