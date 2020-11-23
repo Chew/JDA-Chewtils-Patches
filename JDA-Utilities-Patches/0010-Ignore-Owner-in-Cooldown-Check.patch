@@ -1,0 +1,24 @@
+From 6003273d166a52ffca758a9d1b85dc97421265bb Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Mon, 23 Nov 2020 11:56:33 -0600
+Subject: [PATCH] Ignore Owner in Cooldown Check
+
+
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+index 7ba8ccc..d8186b1 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+@@ -314,8 +314,8 @@ public abstract class Command
+             return;
+         }
+         
+-        //cooldown check
+-        if(cooldown>0)
++        // cooldown check, ignoring owner
++        if(cooldown>0 && !(event.isOwner()))
+         {
+             String key = getCooldownKey(event);
+             int remaining = event.getClient().getRemainingCooldown(key);
+-- 
+2.29.2
+
