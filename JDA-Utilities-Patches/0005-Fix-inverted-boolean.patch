@@ -1,8 +1,7 @@
-From ec38b6ce5af3c50e40cd7dc6fcf26121adc6e5d9 Mon Sep 17 00:00:00 2001
+From 246e87044450408c7fd370567458746373aec6c0 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 19:26:04 -0500
-Subject: [PATCH] Fix inverted boolean This should be the opposite. Fixes
- JDA-Applications/JDA-Utilities#114
+Subject: [PATCH] Fix inverted boolean
 
 
 diff --git a/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java b/oauth2/src/main/java/com/jagrosh/jdautilities/oauth2/entities/impl/OAuth2UserImpl.java
@@ -19,5 +18,5 @@ index 80bf931..108994a 100644
          return email;
      }
 -- 
-2.23.0
+2.29.2
 
