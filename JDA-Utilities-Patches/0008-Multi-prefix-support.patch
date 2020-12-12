@@ -1,4 +1,4 @@
-From 67d2fc79c303fd95f9d30033f4a6425d6fc8d44e Mon Sep 17 00:00:00 2001
+From 5db97354f49b664f155891366b159c50d93ab2bb Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 11 Nov 2020 16:49:03 -0600
 Subject: [PATCH] Multi-prefix support
@@ -113,7 +113,7 @@ index a9019cb..9a76e94 100644
       * Returns the underlying {@link net.dv8tion.jda.api.events.message.MessageReceivedEvent MessageReceivedEvent}
       * for this CommandEvent.
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
-index 77abf63..7afdb16 100644
+index 77abf63..134ac8c 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 @@ -73,6 +73,7 @@ public class CommandClientImpl implements CommandClient, EventListener
@@ -171,21 +171,27 @@ index 77abf63..7afdb16 100644
          // Check for guild specific prefixes
          if(parts == null && settings != null)
          {
-@@ -528,7 +546,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -526,9 +544,13 @@ public class CommandClientImpl implements CommandClient, EventListener
+ 
+         if(parts!=null) //starts with valid prefix
          {
++            String[] prefixAndArgs = rawContent.split(parts[0]);
++            String prefix = "";
++            if (prefixAndArgs.length > 0)
++                prefix = prefixAndArgs[0];
              if(useHelp && parts[0].equalsIgnoreCase(helpWord))
              {
 -                CommandEvent cevent = new CommandEvent(event, parts[1]==null ? "" : parts[1], this);
-+                CommandEvent cevent = new CommandEvent(event, rawContent.split(parts[0])[0], parts[1]==null ? "" : parts[1], this);
++                CommandEvent cevent = new CommandEvent(event, prefix, parts[1]==null ? "" : parts[1], this);
                  if(listener!=null)
                      listener.onCommand(cevent, null);
                  helpConsumer.accept(cevent); // Fire help consumer
-@@ -549,7 +567,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -549,7 +571,7 @@ public class CommandClientImpl implements CommandClient, EventListener
  
                  if(command != null)
                  {
 -                    CommandEvent cevent = new CommandEvent(event, args, this);
-+                    CommandEvent cevent = new CommandEvent(event, rawContent.split(parts[0])[0], args, this);
++                    CommandEvent cevent = new CommandEvent(event, prefix, args, this);
  
                      if(listener != null)
                          listener.onCommand(cevent, command);
