@@ -1,11 +1,11 @@
-From e5fa8fb567ed8618a23db79cc57402be8255fc5f Mon Sep 17 00:00:00 2001
+From a7d634aa9664e289ccbb0012cb37178b47cf5ed8 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 15:02:57 -0500
 Subject: [PATCH] Version/Name changes
 
 
 diff --git a/build.gradle b/build.gradle
-index b835ea5..d7b5d57 100644
+index b835ea5..0b5d4e2 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -22,7 +22,7 @@ plugins {
@@ -13,21 +13,19 @@ index b835ea5..d7b5d57 100644
  }
  
 -def versionInfo = [major: '3', minor: '0', revision: '5']
-+def versionInfo = [major: '1', minor: '0', revision: '0']
++def versionInfo = [major: '1', minor: System.getenv("BUILD_NUMBER").toString()]
  
  task build {
      group = 'build'
-@@ -33,8 +33,8 @@ allprojects {
+@@ -33,7 +33,7 @@ allprojects {
      apply plugin: 'com.jfrog.bintray'
      apply plugin: 'com.github.johnrengelman.shadow'
  
 -    group = 'com.jagrosh'
--    version = versionInfo.values().join('.')
 +    group = 'pw.chew'
-+    version = versionInfo.values().join('.') + "_" + System.getenv("BUILD_NUMBER")
+     version = versionInfo.values().join('.')
  
      ext {
-         jdaVersion = '4.2.0_214'
 @@ -110,10 +110,10 @@ allprojects {
          publications = ['BintrayRelease']
          publish = true
@@ -42,6 +40,16 @@ index b835ea5..d7b5d57 100644
              version {
                  name = project.version
                  released = new Date()
+@@ -162,8 +162,7 @@ subprojects {
+         from('src/main/java') {
+             filter(ReplaceTokens, tokens: [
+                 VERSION_MAJOR:    versionInfo.major,
+-                VERSION_MINOR:    versionInfo.minor,
+-                VERSION_REVISION: versionInfo.revision
++                VERSION_MINOR:    versionInfo.minor
+             ])
+         }
+         into 'build/filteredSrc'
 diff --git a/settings.gradle b/settings.gradle
 index 869ba6a..5783c90 100644
 --- a/settings.gradle
