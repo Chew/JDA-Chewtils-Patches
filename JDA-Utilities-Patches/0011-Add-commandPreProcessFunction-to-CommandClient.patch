@@ -1,0 +1,96 @@
+From 6f1e85bff55fbddcabdd1edaea756bff8a04da43 Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Wed, 10 Feb 2021 23:39:23 -0600
+Subject: [PATCH] Add commandPreProcessFunction to CommandClient
+
+
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+index e9f9ce1..6d0e434 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+@@ -46,6 +46,7 @@ public class CommandClientBuilder
+     private String altprefix;
+     private String[] prefixes;
+     private Function<MessageReceivedEvent, String> prefixFunction;
++    private Function<MessageReceivedEvent, Boolean> commandPreProcessFunction;
+     private String serverInvite;
+     private String success;
+     private String warning;
+@@ -73,7 +74,7 @@ public class CommandClientBuilder
+      */
+     public CommandClient build()
+     {
+-        CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, prefixes, prefixFunction, activity, status, serverInvite,
++        CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, prefixes, prefixFunction, commandPreProcessFunction, activity, status, serverInvite,
+                                                      success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), useHelp,
+                                                      shutdownAutomatically, helpConsumer, helpWord, executor, linkedCacheSize, compiler, manager);
+         if(listener!=null)
+@@ -171,7 +172,23 @@ public class CommandClientBuilder
+         this.prefixFunction = prefixFunction;
+         return this;
+     }
+-    
++
++    /**
++     * Sets the pre-process function. This code is executed before every command.<br>
++     * Returning "true" will allow processing to proceed.<br>
++     * Returning "false" or "null" will prevent the Command from executing.
++     *
++     * @param commandPreProcessFunction
++     *        The function to execute
++     *
++     * @return This builder
++     */
++    public CommandClientBuilder setCommandPreProcessFunction(Function<MessageReceivedEvent, Boolean> commandPreProcessFunction)
++    {
++        this.commandPreProcessFunction = commandPreProcessFunction;
++        return this;
++    }
++
+     /**
+      * Sets whether the {@link com.jagrosh.jdautilities.command.CommandClient CommandClient} will use
+      * the builder to automatically create a help command or not.
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+index 8d49bf0..5a5e7d2 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+@@ -75,6 +75,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private final String altprefix;
+     private final String[] prefixes;
+     private final Function<MessageReceivedEvent, String> prefixFunction;
++    private final Function<MessageReceivedEvent, Boolean> commandPreProcessFunction;
+     private final String serverInvite;
+     private final HashMap<String, Integer> commandIndex;
+     private final ArrayList<Command> commands;
+@@ -97,7 +98,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private CommandListener listener = null;
+     private int totalGuilds;
+ 
+-    public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, String[] prefixes, Function<MessageReceivedEvent, String> prefixFunction, Activity activity, OnlineStatus status, String serverInvite,
++    public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, String[] prefixes, Function<MessageReceivedEvent, String> prefixFunction, Function<MessageReceivedEvent, Boolean> commandPreProcessFunction, Activity activity, OnlineStatus status, String serverInvite,
+                              String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands,
+                              boolean useHelp, boolean shutdownAutomatically, Consumer<CommandEvent> helpConsumer, String helpWord, ScheduledExecutorService executor,
+                              int linkedCacheSize, AnnotatedModuleCompiler compiler, GuildSettingsManager manager)
+@@ -124,6 +125,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+         this.altprefix = altprefix==null || altprefix.isEmpty() ? null : altprefix;
+         this.prefixes = prefixes==null || prefixes.length == 0 ? null : prefixes;
+         this.prefixFunction = prefixFunction;
++        this.commandPreProcessFunction = commandPreProcessFunction==null ? event -> true : commandPreProcessFunction;
+         this.textPrefix = prefix;
+         this.activity = activity;
+         this.status = status;
+@@ -592,7 +594,10 @@ public class CommandClientImpl implements CommandClient, EventListener
+                     if(listener != null)
+                         listener.onCommand(cevent, command);
+                     uses.put(command.getName(), uses.getOrDefault(command.getName(), 0) + 1);
+-                    command.run(cevent);
++                    if(commandPreProcessFunction.apply(event))
++                    {
++                        command.run(cevent);
++                    }
+                     return; // Command is done
+                 }
+             }
+-- 
+2.30.0
+
