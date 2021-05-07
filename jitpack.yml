@@ -1,4 +1,5 @@
 before_install:
+   - git pull --recurse-submodules
    - ./chewtil patch
 install:
    - cd JDA-Chewtils
