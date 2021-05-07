@@ -13,7 +13,7 @@ index b835ea5..0b5d4e2 100644
  }
  
 -def versionInfo = [major: '3', minor: '0', revision: '5']
-+def versionInfo = [major: '1', minor: System.getenv("BUILD_NUMBER").toString()]
++def versionInfo = [major: '1', minor: '19']
  
  task build {
      group = 'build'
