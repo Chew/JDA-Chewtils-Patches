@@ -1,7 +1,5 @@
-before_install:
-   - git pull --recurse-submodules
-   - ./chewtil patch
 install:
+   - ./chewtil patch
    - cd JDA-Chewtils
    - chmod u+x ./gradlew
    - ./gradlew clean install
