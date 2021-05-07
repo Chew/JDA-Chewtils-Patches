@@ -4,4 +4,4 @@ before_install:
    - cd JDA-Chewtils
    - chmod u+x ./gradlew
 install:
-   - ./gradlew build
+   - ./gradlew clean install
