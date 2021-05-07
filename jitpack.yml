@@ -1,0 +1,7 @@
+before_install:
+   - sdk use 8.0.265.hs-adpt
+   - ./chewtil patch
+   - cd JDA-Chewtils
+   - chmod u+x ./gradlew
+install:
+   - ./gradlew build
