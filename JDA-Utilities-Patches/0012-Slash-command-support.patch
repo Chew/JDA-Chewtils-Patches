@@ -1,4 +1,4 @@
-From 36fbf5d58fd84bbe7572bf4f127cfe562c67737f Mon Sep 17 00:00:00 2001
+From bc6830c1548f9e8853db4124cc349e8e1c0dffa8 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
@@ -1071,7 +1071,7 @@ index 0000000..0abf860
 +    }
 +}
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
-index 5a5e7d2..b981dc6 100644
+index 5a5e7d2..3976bb8 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 @@ -28,9 +28,12 @@ import net.dv8tion.jda.api.events.ReadyEvent;
@@ -1167,19 +1167,7 @@ index 5a5e7d2..b981dc6 100644
      @Override
      public void removeCommand(String name)
      {
-@@ -455,12 +499,21 @@ public class CommandClientImpl implements CommandClient, EventListener
-         executor.shutdown();
-     }
- 
-+    public void removeSlashCommands(JDA jda) {
-+        for (String id : slashCommandIds) {
-+            jda.deleteCommandById(id).queue();
-+        }
-+    }
-+
-     @Override
-     public void onEvent(GenericEvent event)
-     {
+@@ -461,6 +505,9 @@ public class CommandClientImpl implements CommandClient, EventListener
          if(event instanceof MessageReceivedEvent)
              onMessageReceived((MessageReceivedEvent)event);
  
@@ -1189,23 +1177,13 @@ index 5a5e7d2..b981dc6 100644
          else if(event instanceof GuildMessageDeleteEvent && usesLinkedDeletion())
              onMessageDelete((GuildMessageDeleteEvent) event);
  
-@@ -476,6 +529,7 @@ public class CommandClientImpl implements CommandClient, EventListener
-             onReady((ReadyEvent)event);
-         else if(event instanceof ShutdownEvent)
-         {
-+            removeSlashCommands(event.getJDA());
-             if(shutdownAutomatically)
-                 shutdown();
-         }
-@@ -498,6 +552,27 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -498,6 +545,23 @@ public class CommandClientImpl implements CommandClient, EventListener
          if(manager != null)
              manager.init();
  
 +        // Upsert slash commands
-+        System.out.println("Upserting slash commands");
 +        for (SlashCommand command : slashCommands)
 +        {
-+            System.out.println("Generating CommandData for " + command.getName() + ".");
 +            CommandData data = new CommandData(command.getName(), command.getHelp());
 +            if (!command.getOptions().isEmpty()) {
 +                for (OptionData optionData : command.getOptions()) {
@@ -1214,10 +1192,8 @@ index 5a5e7d2..b981dc6 100644
 +            }
 +
 +            if (command.isGuildOnly() && command.getGuildId() != null) {
-+                System.out.println("Adding command " + command.getName() + " to server " + command.getGuildId());
 +                event.getJDA().getGuildById(command.getGuildId()).upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
 +            } else {
-+                System.out.println("Adding command " + command.getName());
 +                event.getJDA().upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
 +            }
 +        }
@@ -1225,7 +1201,7 @@ index 5a5e7d2..b981dc6 100644
          sendStats(event.getJDA());
      }
  
-@@ -607,6 +682,29 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -607,6 +671,29 @@ public class CommandClientImpl implements CommandClient, EventListener
              listener.onNonCommandMessage(event);
      }
  
