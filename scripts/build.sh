@@ -3,5 +3,5 @@
 git submodule update --init && ./scripts/applyPatches.sh
 
 if [ "$1" == "--jar" ]; then
-     mvn clean package
+     cd JDA-Chewtils && ./gradlew build
 fi
