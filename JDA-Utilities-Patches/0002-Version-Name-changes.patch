@@ -1,15 +1,18 @@
-From a7d634aa9664e289ccbb0012cb37178b47cf5ed8 Mon Sep 17 00:00:00 2001
+From 02c98045c7206249197dffbb3757a77144a795c1 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Wed, 30 Sep 2020 15:02:57 -0500
 Subject: [PATCH] Version/Name changes
 
 
 diff --git a/build.gradle b/build.gradle
-index b835ea5..0b5d4e2 100644
+index b835ea5..3a2f282 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -22,7 +22,7 @@ plugins {
-     id 'com.jfrog.bintray' version '1.8.4'
+@@ -19,10 +19,9 @@ import org.apache.tools.ant.filters.ReplaceTokens
+ plugins {
+     id 'com.github.ben-manes.versions' version '0.17.0'
+     id 'com.github.johnrengelman.shadow' version '2.0.2'
+-    id 'com.jfrog.bintray' version '1.8.4'
  }
  
 -def versionInfo = [major: '3', minor: '0', revision: '5']
@@ -17,8 +20,11 @@ index b835ea5..0b5d4e2 100644
  
  task build {
      group = 'build'
-@@ -33,7 +33,7 @@ allprojects {
-     apply plugin: 'com.jfrog.bintray'
+@@ -30,14 +29,13 @@ task build {
+ 
+ allprojects {
+     apply plugin: 'maven-publish'
+-    apply plugin: 'com.jfrog.bintray'
      apply plugin: 'com.github.johnrengelman.shadow'
  
 -    group = 'com.jagrosh'
@@ -26,21 +32,77 @@ index b835ea5..0b5d4e2 100644
      version = versionInfo.values().join('.')
  
      ext {
-@@ -110,10 +110,10 @@ allprojects {
-         publications = ['BintrayRelease']
-         publish = true
-         pkg {
+-        jdaVersion = '4.2.0_214'
++        jdaVersion = '4.2.1_255'
+         slf4jVersion = '1.7.25'
+         okhttpVersion = '3.13.0'
+         findbugsVersion = '3.0.2'
+@@ -91,7 +89,11 @@ allprojects {
+     }
+ 
+     repositories {
+-        jcenter()
++        mavenCentral()
++        maven {
++            name 'm2-dv8tion'
++            url 'https://m2.dv8tion.net/releases'
++        }
+     }
+ 
+     build {
+@@ -104,36 +106,23 @@ allprojects {
+         dependsOn { shadowJar }
+     }
+ 
+-    bintray {
+-        user = bintrayUsername
+-        key = bintrayApiKey
+-        publications = ['BintrayRelease']
+-        publish = true
+-        pkg {
 -            repo = 'maven'
 -            name = 'JDA-Utilities'
-+            repo = 'projects'
-+            name = 'JDA-Chewtils'
-             licenses = ['Apache-2.0']
+-            licenses = ['Apache-2.0']
 -            vcsUrl = 'https://github.com/JDA-Applications/JDA-Utilities'
-+            vcsUrl = 'https://github.com/Chew/JDA-Chewtils'
-             version {
-                 name = project.version
-                 released = new Date()
-@@ -162,8 +162,7 @@ subprojects {
+-            version {
+-                name = project.version
+-                released = new Date()
+-            }
+-        }
+-    }
+-
+-    bintrayUpload {
+-        dependsOn { rootProject.getTasksByName('build', true) }
+-
+-        onlyIf { !project.property('bintrayUsername')?.trim()?.empty }
+-        onlyIf { !project.property('bintrayApiKey')?.trim()?.empty }
+-    }
+-
+     publishing {
+         publications {
+-            BintrayRelease(MavenPublication) {
+-                it.groupId = project.group
+-                it.artifactId = project.artifactId
+-                it.version = project.version
++            maven(MavenPublication) {
++                groupId = project.group
++                artifactId = project.artifactId
++                version = project.version
++            }
++        }
++        repositories {
++            maven {
++                def releasesRepoUrl = "https://m2.chew.pro/releases"
++                def snapshotsRepoUrl = "https://m2.chew.pro/snapshots"
++                url = project.version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
++                credentials {
++                    username = project.property("mchew-username")
++                    password = project.property("mchew-password")
++                }
+             }
+         }
+     }
+@@ -162,8 +151,7 @@ subprojects {
          from('src/main/java') {
              filter(ReplaceTokens, tokens: [
                  VERSION_MAJOR:    versionInfo.major,
@@ -50,6 +112,34 @@ index b835ea5..0b5d4e2 100644
              ])
          }
          into 'build/filteredSrc'
+@@ -206,7 +194,7 @@ subprojects {
+ 
+     publishing {
+         publications {
+-            BintrayRelease(MavenPublication) {
++            maven(MavenPublication) {
+                 from components.java
+                 artifact javadocJar
+                 artifact sourceJar
+@@ -290,14 +278,14 @@ task clean(type: Delete) {
+ 
+ publishing {
+     publications {
+-        BintrayRelease(MavenPublication) {
++        maven(MavenPublication) {
+             pom.withXml {
+                 def repositoriesNode = asNode().appendNode('repositories')
+                 def repositoryNode = repositoriesNode.appendNode('repository')
+ 
+-                repositoryNode.appendNode('name', 'bintray')
+-                repositoryNode.appendNode('id', 'bintray-jagrosh-maven')
+-                repositoryNode.appendNode('url', 'https://dl.bintray.com/jagrosh/maven')
++                repositoryNode.appendNode('name', 'm2-chew')
++                repositoryNode.appendNode('id', 'm2-chew')
++                repositoryNode.appendNode('url', 'https://m2.chew.pro')
+ 
+                 def dependenciesNode = asNode().appendNode('dependencies')
+                 configurations.compile.allDependencies.each {
 diff --git a/settings.gradle b/settings.gradle
 index 869ba6a..5783c90 100644
 --- a/settings.gradle
@@ -64,5 +154,5 @@ index 869ba6a..5783c90 100644
  include ':command'
  include ':commons'
 -- 
-2.29.2
+2.30.1
 
