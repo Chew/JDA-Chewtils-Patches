@@ -1,11 +1,11 @@
-From a599f9fc91ff804c0b7a0949df516df8f7a3ce24 Mon Sep 17 00:00:00 2001
+From a53f19686185d4d2d972b8ee3dc206eaf21f427f Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
 
 
 diff --git a/build.gradle b/build.gradle
-index 3a2f282..022d22e 100644
+index 3a2f282..0838420 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -35,7 +35,7 @@ allprojects {
@@ -13,7 +13,7 @@ index 3a2f282..022d22e 100644
  
      ext {
 -        jdaVersion = '4.2.1_255'
-+        jdaVersion = 'feature~slash-commands-SNAPSHOT'
++        jdaVersion = '757de9be45'
          slf4jVersion = '1.7.25'
          okhttpVersion = '3.13.0'
          findbugsVersion = '3.0.2'
@@ -37,7 +37,7 @@ index 3a2f282..022d22e 100644
              name 'm2-dv8tion'
              url 'https://m2.dv8tion.net/releases'
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
-index d8186b1..ed2dcf0 100644
+index d8186b1..3bb63c2 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
 @@ -68,12 +68,15 @@ import net.dv8tion.jda.api.entities.VoiceChannel;
@@ -67,7 +67,17 @@ index d8186b1..ed2dcf0 100644
       */
      protected String arguments = null;
      
-@@ -127,6 +132,7 @@ public abstract class Command
+@@ -102,7 +107,8 @@ public abstract class Command
+     
+     /**
+      * {@code true} if the command may only be used by a User with an ID matching the
+-     * Owners or any of the CoOwners.
++     * Owners or any of the CoOwners.<br>
++     * If enabled for a Slash Command, the owners will be added to the SlashCommand.
+      * <br>Default {@code false}.
+      */
+     protected boolean ownerCommand = false;
+@@ -127,6 +133,7 @@ public abstract class Command
      /**
       * The aliases of the command, when calling a command these function identically to calling the
       * {@link com.jagrosh.jdautilities.command.Command#name Command.name}.
@@ -75,15 +85,29 @@ index d8186b1..ed2dcf0 100644
       */
      protected String[] aliases = new String[0];
      
-@@ -153,6 +159,7 @@ public abstract class Command
+@@ -152,7 +159,11 @@ public abstract class Command
+ 
      /**
       * {@code true} if this command should be hidden from the help.
-      * <br>Default {@code false}
-+     * This won't work for Slash Commands, as they will always show up.
+-     * <br>Default {@code false}
++     * <br>Default {@code false}<br>
++     * If enabled for a slash command, you must give yourself permission to use it.
++     * @see net.dv8tion.jda.api.requests.restaction.CommandCreateAction#setDefaultEnabled(boolean)
++     * @see SlashCommand#enabledRoles
++     * @see SlashCommand#enabledUsers
       */
      protected boolean hidden = false;
  
-@@ -692,6 +699,7 @@ public abstract class Command
+@@ -529,7 +540,7 @@ public abstract class Command
+     }
+     
+     /**
+-     * Checks whether or not this command should be hidden from the help
++     * Checks whether or not this command should be hidden from the help or disabled by default (SlashCommands)
+      *
+      * @return {@code true} if the command should be hidden, otherwise {@code false}
+      */
+@@ -692,6 +703,7 @@ public abstract class Command
          
          /**
           * Runs a test of the provided {@link java.util.function.Predicate}.
@@ -349,10 +373,10 @@ index f4658a8..ed93f17 100644
  }
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 new file mode 100644
-index 0000000..78737ec
+index 0000000..44382a3
 --- /dev/null
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
-@@ -0,0 +1,425 @@
+@@ -0,0 +1,464 @@
 +/*
 + * Copyright 2016-2018 John Grosh (jagrosh) & Kaidan Gustave (TheMonitorLizard)
 + *
@@ -420,6 +444,26 @@ index 0000000..78737ec
 +public abstract class SlashCommand extends Command
 +{
 +    /**
++     * This option is deprecated in favor of {@link #enabledRoles}
++     * Please replace this with this.enabledRoles = new String[]{Roles};
++     * While this check is still done, it's better to let Discord do the work.
++     */
++    @Deprecated
++    protected String requiredRole = null;
++
++    /**
++     * The list of role IDs who can use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.
++     */
++    protected String[] enabledRoles = new String[]{};
++
++    /**
++     * The list of user IDs who can use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.
++     */
++    protected String[] enabledUsers = new String[]{};
++
++    /**
 +     * The child commands of the command. These are used in the format {@code /<parent name>
 +     * <child name>}.
 +     */
@@ -469,6 +513,7 @@ index 0000000..78737ec
 +     * <b>
 +     *     Because this is a SlashCommand, this is called, but does nothing.
 +     *     You can still override this if you want to have a separate response for normal [prefix][name].
++     *     Keep in mind you must add it as a Command via {@link CommandClientBuilder#addCommand(Command)} for it to work properly.
 +     * </b>
 +     *
 +     * @param  event
@@ -656,6 +701,28 @@ index 0000000..78737ec
 +    }
 +
 +    /**
++     * Gets the enabled roles for this Slash Command.
++     * A user MUST have a role for a command to show up.
++     *
++     * @return a list of String role IDs
++     */
++    public String[] getEnabledRoles()
++    {
++        return enabledRoles;
++    }
++
++    /**
++     * Gets the enabled roles for this Slash Command.
++     * A user with an ID in this list is required for the command to show up.
++     *
++     * @return a list of String user IDs
++     */
++    public String[] getEnabledUsers()
++    {
++        return enabledUsers;
++    }
++
++    /**
 +     * Gets the options associated with this command.
 +     *
 +     * @return the OptionData array for options
@@ -678,9 +745,7 @@ index 0000000..78737ec
 +        CommandData data = new CommandData(getName(), getHelp());
 +        if (!getOptions().isEmpty())
 +        {
-+            for (OptionData optionData : getOptions()) {
-+                data.addOption(optionData);
-+            }
++            data.addOptions(getOptions());
 +        }
 +        if (children.length != 0)
 +        {
@@ -689,11 +754,9 @@ index 0000000..78737ec
 +                SubcommandData subcommandData = new SubcommandData(child.getName(), child.getHelp());
 +                if (!getOptions().isEmpty())
 +                {
-+                    for (OptionData optionData : child.getOptions()) {
-+                        subcommandData.addOption(optionData);
-+                    }
++                    subcommandData.addOptions(child.getOptions());
 +                }
-+                data.addSubcommand(subcommandData);
++                data.addSubcommands(subcommandData);
 +            }
 +        }
 +
@@ -779,7 +842,7 @@ index 0000000..78737ec
 +    }
 +}
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
-index 5a5e7d2..4c9a949 100644
+index 5a5e7d2..7a20bb7 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 @@ -28,9 +28,12 @@ import net.dv8tion.jda.api.events.ReadyEvent;
@@ -791,7 +854,7 @@ index 5a5e7d2..4c9a949 100644
  import net.dv8tion.jda.api.events.message.guild.GuildMessageDeleteEvent;
  import net.dv8tion.jda.api.hooks.EventListener;
 +import net.dv8tion.jda.api.interactions.commands.build.CommandData;
-+import net.dv8tion.jda.api.interactions.commands.build.OptionData;
++import net.dv8tion.jda.api.interactions.commands.privileges.CommandPrivilege;
  import net.dv8tion.jda.internal.utils.Checks;
  import okhttp3.*;
  import org.json.JSONObject;
@@ -889,7 +952,7 @@ index 5a5e7d2..4c9a949 100644
          else if(event instanceof GuildMessageDeleteEvent && usesLinkedDeletion())
              onMessageDelete((GuildMessageDeleteEvent) event);
  
-@@ -498,6 +549,22 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -498,6 +549,48 @@ public class CommandClientImpl implements CommandClient, EventListener
          if(manager != null)
              manager.init();
  
@@ -900,9 +963,35 @@ index 5a5e7d2..4c9a949 100644
 +            {
 +                CommandData data = command.buildCommandData();
 +
++                List<CommandPrivilege> privileges = new ArrayList<>();
++                // Privilege Checks
++                for (String role : command.getEnabledRoles())
++                    privileges.add(CommandPrivilege.enableRole(role));
++                for (String user : command.getEnabledRoles())
++                    privileges.add(CommandPrivilege.enableUser(user));
++                // Co/Owner checks
++                if (command.isOwnerCommand())
++                {
++                    // Add owner
++                    privileges.add(CommandPrivilege.enableUser(getOwnerId()));
++                    // Add co-owners
++                    for (String user : getCoOwnerIds())
++                        privileges.add(CommandPrivilege.enableUser(user));
++                }
++                // Default enabled is synonymous with hidden now.
++                data.setDefaultEnabled(command.isHidden());
++
 +                if (forcedGuildId != null || (command.isGuildOnly() && command.getGuildId() != null)) {
 +                    String guildId = forcedGuildId != null ? forcedGuildId : command.getGuildId();
-+                    event.getJDA().getGuildById(guildId).upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
++                    Guild guild = event.getJDA().getGuildById(guildId);
++                    if (guild == null) {
++                        LOG.error("Could not find guild with specified ID: " + forcedGuildId + ". Not going to upsert.");
++                        continue;
++                    }
++                    guild.upsertCommand(data).queue(command1 -> {
++                        slashCommandIds.add(command1.getId());
++                        command1.updatePrivileges(guild, privileges).queue();
++                    });
 +                } else {
 +                    event.getJDA().upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
 +                }
@@ -912,7 +1001,7 @@ index 5a5e7d2..4c9a949 100644
          sendStats(event.getJDA());
      }
  
-@@ -607,6 +674,25 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -607,6 +700,25 @@ public class CommandClientImpl implements CommandClient, EventListener
              listener.onNonCommandMessage(event);
      }
  
