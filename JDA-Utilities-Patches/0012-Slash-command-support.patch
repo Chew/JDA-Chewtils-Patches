@@ -1,4 +1,4 @@
-From 95c69c98e854493e07dc40f7cd3fbe233e36212f Mon Sep 17 00:00:00 2001
+From d2c6ed06e0a2102d6d9a78069fb667e1f468c38b Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
@@ -160,27 +160,29 @@ index f8db009..76627dd 100644
       * Removes a single {@link com.jagrosh.jdautilities.command.Command Command} from this CommandClient's
       * registered Commands at the index linked to the provided name/alias.
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
-index 6d0e434..1defeb2 100644
+index 6d0e434..939e09b 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
-@@ -54,6 +54,7 @@ public class CommandClientBuilder
+@@ -54,6 +54,9 @@ public class CommandClientBuilder
      private String carbonKey;
      private String botsKey;
      private final LinkedList<Command> commands = new LinkedList<>();
 +    private final LinkedList<SlashCommand> slashCommands = new LinkedList<>();
++    private String forcedGuildId = null;
++    private boolean manualUpsert = false;
      private CommandListener listener;
      private boolean useHelp = true;
      private boolean shutdownAutomatically = true;
-@@ -75,7 +76,7 @@ public class CommandClientBuilder
+@@ -75,7 +78,7 @@ public class CommandClientBuilder
      public CommandClient build()
      {
          CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, prefixes, prefixFunction, commandPreProcessFunction, activity, status, serverInvite,
 -                                                     success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), useHelp,
-+                                                     success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), new ArrayList<>(slashCommands), useHelp,
++                                                     success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), new ArrayList<>(slashCommands), forcedGuildId, manualUpsert, useHelp,
                                                       shutdownAutomatically, helpConsumer, helpWord, executor, linkedCacheSize, compiler, manager);
          if(listener!=null)
              client.setListener(listener);
-@@ -346,6 +347,38 @@ public class CommandClientBuilder
+@@ -346,6 +349,66 @@ public class CommandClientBuilder
          return this;
      }
  
@@ -216,15 +218,43 @@ index 6d0e434..1defeb2 100644
 +        return this;
 +    }
 +
++    /**
++     * Forces Guild Only for SlashCommands.
++     * This is the same as setting this.guildOnly = true and this.guildId = your value for every command.
++     * Setting this to null disables the feature, but it is off by default.
++     *
++     * @param guildId the guild ID.
++     * @return This Builder
++     */
++    public CommandClientBuilder forceGuildOnly(String guildId)
++    {
++        this.forcedGuildId = guildId;
++        return this;
++    }
++
++    /**
++     * Whether or not to manually upsert slash commands.
++     * This is designed if you want to handle upserting, instead of doing it every boot.
++     * False by default.
++     *
++     * @param manualUpsert your option.
++     * @return This Builder
++     */
++    public CommandClientBuilder setManualUpsert(boolean manualUpsert)
++    {
++        this.manualUpsert = manualUpsert;
++        return this;
++    }
++
      /**
       * Adds an annotated command module to the
       * {@link com.jagrosh.jdautilities.command.impl.CommandClientImpl CommandClientImpl} for this session.
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 new file mode 100644
-index 0000000..fa53eae
+index 0000000..1e63795
 --- /dev/null
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
-@@ -0,0 +1,390 @@
+@@ -0,0 +1,428 @@
 +/*
 + * Copyright 2016-2018 John Grosh (jagrosh) & Kaidan Gustave (TheMonitorLizard)
 + *
@@ -248,7 +278,9 @@ index 0000000..fa53eae
 +import net.dv8tion.jda.api.entities.Member;
 +import net.dv8tion.jda.api.entities.VoiceChannel;
 +import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
++import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 +import net.dv8tion.jda.api.interactions.commands.build.OptionData;
++import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
 +
 +import java.util.ArrayList;
 +import java.util.List;
@@ -308,8 +340,9 @@ index 0000000..fa53eae
 +     * This is to specify different options for arguments and the stuff.
 +     *
 +     * For example, to add an argument for "input", you can do this:<br>
-+     * <pre><code> OptionData data = new OptionData(OptionType.STRING, "input", "The input for the command").setRequired(true);
-+     *     List OptionData dataList = new ArrayList();
++     * <pre><code>
++     *     OptionData data = new OptionData(OptionType.STRING, "input", "The input for the command").setRequired(true);
++     *    {@literal List<OptionData> dataList = new ArrayList<>();}
 +     *     dataList.add(data);
 +     *     this.options = dataList;</code></pre>
 +     */
@@ -536,6 +569,41 @@ index 0000000..fa53eae
 +    }
 +
 +    /**
++     * Builds CommandData for the SlashCommand upsert.
++     * This code is executed when we need to upsert the command.
++     *
++     * Useful for manual upserting.
++     *
++     * @return the built command data
++     */
++    public CommandData buildCommandData()
++    {
++        CommandData data = new CommandData(getName(), getHelp());
++        if (!getOptions().isEmpty())
++        {
++            for (OptionData optionData : getOptions()) {
++                data.addOption(optionData);
++            }
++        }
++        if (children.length != 0)
++        {
++            for (SlashCommand child : children)
++            {
++                SubcommandData subcommandData = new SubcommandData(child.getName(), child.getHelp());
++                if (!getOptions().isEmpty())
++                {
++                    for (OptionData optionData : child.getOptions()) {
++                        subcommandData.addOption(optionData);
++                    }
++                }
++                data.addSubcommand(subcommandData);
++            }
++        }
++
++        return data;
++    }
++
++    /**
 +     * Gets the {@link SlashCommand#children Command.children} for the Command.
 +     *
 +     * @return The children for the Command
@@ -616,7 +684,7 @@ index 0000000..fa53eae
 +    }
 +}
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
-index 5a5e7d2..3976bb8 100644
+index 5a5e7d2..81af25a 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 @@ -28,9 +28,12 @@ import net.dv8tion.jda.api.events.ReadyEvent;
@@ -632,7 +700,7 @@ index 5a5e7d2..3976bb8 100644
  import net.dv8tion.jda.internal.utils.Checks;
  import okhttp3.*;
  import org.json.JSONObject;
-@@ -78,7 +81,10 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -78,7 +81,12 @@ public class CommandClientImpl implements CommandClient, EventListener
      private final Function<MessageReceivedEvent, Boolean> commandPreProcessFunction;
      private final String serverInvite;
      private final HashMap<String, Integer> commandIndex;
@@ -640,19 +708,21 @@ index 5a5e7d2..3976bb8 100644
      private final ArrayList<Command> commands;
 +    private final ArrayList<SlashCommand> slashCommands;
 +    private final ArrayList<String> slashCommandIds;
++    private final String forcedGuildId;
++    private final boolean manualUpsert;
      private final String success;
      private final String warning;
      private final String error;
-@@ -99,7 +105,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -99,7 +107,7 @@ public class CommandClientImpl implements CommandClient, EventListener
      private int totalGuilds;
  
      public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, String[] prefixes, Function<MessageReceivedEvent, String> prefixFunction, Function<MessageReceivedEvent, Boolean> commandPreProcessFunction, Activity activity, OnlineStatus status, String serverInvite,
 -                             String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands,
-+                             String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands, ArrayList<SlashCommand> slashCommands,
++                             String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands, ArrayList<SlashCommand> slashCommands, String forcedGuildId, boolean manualUpsert,
                               boolean useHelp, boolean shutdownAutomatically, Consumer<CommandEvent> helpConsumer, String helpWord, ScheduledExecutorService executor,
                               int linkedCacheSize, AnnotatedModuleCompiler compiler, GuildSettingsManager manager)
      {
-@@ -136,7 +142,10 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -136,7 +144,12 @@ public class CommandClientImpl implements CommandClient, EventListener
          this.carbonKey = carbonKey;
          this.botsKey = botsKey;
          this.commandIndex = new HashMap<>();
@@ -660,10 +730,12 @@ index 5a5e7d2..3976bb8 100644
          this.commands = new ArrayList<>();
 +        this.slashCommands = new ArrayList<>();
 +        this.slashCommandIds = new ArrayList<>();
++        this.forcedGuildId = forcedGuildId;
++        this.manualUpsert = manualUpsert;
          this.cooldowns = new HashMap<>();
          this.uses = new HashMap<>();
          this.linkMap = linkedCacheSize>0 ? new FixedSizeCache<>(linkedCacheSize) : null;
-@@ -182,6 +191,12 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -182,6 +195,12 @@ public class CommandClientImpl implements CommandClient, EventListener
          {
              addCommand(command);
          }
@@ -676,7 +748,7 @@ index 5a5e7d2..3976bb8 100644
      }
  
      @Override
-@@ -292,6 +307,35 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -292,6 +311,35 @@ public class CommandClientImpl implements CommandClient, EventListener
          commands.add(index,command);
      }
  
@@ -712,7 +784,7 @@ index 5a5e7d2..3976bb8 100644
      @Override
      public void removeCommand(String name)
      {
-@@ -461,6 +505,9 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -461,6 +509,9 @@ public class CommandClientImpl implements CommandClient, EventListener
          if(event instanceof MessageReceivedEvent)
              onMessageReceived((MessageReceivedEvent)event);
  
@@ -722,31 +794,30 @@ index 5a5e7d2..3976bb8 100644
          else if(event instanceof GuildMessageDeleteEvent && usesLinkedDeletion())
              onMessageDelete((GuildMessageDeleteEvent) event);
  
-@@ -498,6 +545,23 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -498,6 +549,22 @@ public class CommandClientImpl implements CommandClient, EventListener
          if(manager != null)
              manager.init();
  
-+        // Upsert slash commands
-+        for (SlashCommand command : slashCommands)
++        // Upsert slash commands, if not manual
++        if (!manualUpsert)
 +        {
-+            CommandData data = new CommandData(command.getName(), command.getHelp());
-+            if (!command.getOptions().isEmpty()) {
-+                for (OptionData optionData : command.getOptions()) {
-+                    data.addOption(optionData);
-+                }
-+            }
++            for (SlashCommand command : slashCommands)
++            {
++                CommandData data = command.buildCommandData();
 +
-+            if (command.isGuildOnly() && command.getGuildId() != null) {
-+                event.getJDA().getGuildById(command.getGuildId()).upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
-+            } else {
-+                event.getJDA().upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
++                if (forcedGuildId != null || (command.isGuildOnly() && command.getGuildId() != null)) {
++                    String guildId = forcedGuildId != null ? forcedGuildId : command.getGuildId();
++                    event.getJDA().getGuildById(guildId).upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
++                } else {
++                    event.getJDA().upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
++                }
 +            }
 +        }
 +
          sendStats(event.getJDA());
      }
  
-@@ -607,6 +671,29 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -607,6 +674,29 @@ public class CommandClientImpl implements CommandClient, EventListener
              listener.onNonCommandMessage(event);
      }
  
