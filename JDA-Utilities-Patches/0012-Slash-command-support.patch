@@ -1,23 +1,23 @@
-From e606a0c8615d377c67decfce1cc7a25e8649281f Mon Sep 17 00:00:00 2001
+From a599f9fc91ff804c0b7a0949df516df8f7a3ce24 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
 
 
 diff --git a/build.gradle b/build.gradle
-index 0b5d4e2..8d89cce 100644
+index 3a2f282..022d22e 100644
 --- a/build.gradle
 +++ b/build.gradle
-@@ -37,7 +37,7 @@ allprojects {
+@@ -35,7 +35,7 @@ allprojects {
      version = versionInfo.values().join('.')
  
      ext {
--        jdaVersion = '4.2.0_214'
+-        jdaVersion = '4.2.1_255'
 +        jdaVersion = 'feature~slash-commands-SNAPSHOT'
          slf4jVersion = '1.7.25'
          okhttpVersion = '3.13.0'
          findbugsVersion = '3.0.2'
-@@ -45,7 +45,7 @@ allprojects {
+@@ -43,7 +43,7 @@ allprojects {
          junitVersion = '4.13.1' // TODO Move to junit 5?
  
          dependencies {
@@ -26,16 +26,16 @@ index 0b5d4e2..8d89cce 100644
              slf4j = { [group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion] }
              okhttp = { [group: 'com.squareup.okhttp3', name: 'okhttp', version: okhttpVersion] }
              findbugs = { [group: 'com.google.code.findbugs', name: 'jsr305', version: findbugsVersion] }
-@@ -92,6 +92,9 @@ allprojects {
- 
-     repositories {
-         jcenter()
-+        maven { url 'https://jitpack.io' }
-+        mavenCentral()
-+        mavenLocal()
+@@ -89,7 +89,9 @@ allprojects {
      }
  
-     build {
+     repositories {
++        maven { url 'https://jitpack.io' }
+         mavenCentral()
++        mavenLocal()
+         maven {
+             name 'm2-dv8tion'
+             url 'https://m2.dv8tion.net/releases'
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
 index d8186b1..ed2dcf0 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
