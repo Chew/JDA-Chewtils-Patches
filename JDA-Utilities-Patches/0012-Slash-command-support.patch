@@ -1,4 +1,4 @@
-From d2c6ed06e0a2102d6d9a78069fb667e1f468c38b Mon Sep 17 00:00:00 2001
+From e606a0c8615d377c67decfce1cc7a25e8649281f Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
@@ -249,12 +249,110 @@ index 6d0e434..939e09b 100644
      /**
       * Adds an annotated command module to the
       * {@link com.jagrosh.jdautilities.command.impl.CommandClientImpl CommandClientImpl} for this session.
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
+index f4658a8..ed93f17 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
+@@ -15,6 +15,7 @@
+  */
+ package com.jagrosh.jdautilities.command;
+ 
++import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+ 
+ /**
+@@ -35,6 +36,17 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent}.
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link com.jagrosh.jdautilities.command.Command Command} is triggered
+@@ -51,6 +63,22 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onCompletedCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent} after it's
++     * completed successfully.
++     *
++     * <p>Note that a <i>successfully</i> completed slash command is one that has not encountered
++     * an error or exception. Calls that do face errors should be handled by
++     * {@link CommandListener#onSlashCommandException(SlashCommandEvent, SlashCommand, Throwable) CommandListener#onSlashCommandException}
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onCompletedSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link com.jagrosh.jdautilities.command.Command Command} is triggered
+@@ -63,6 +91,18 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onTerminatedCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand Command} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent} but is
++     * terminated before completion.
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onTerminatedSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link net.dv8tion.jda.api.events.message.MessageReceivedEvent MessageReceivedEvent}
+@@ -117,4 +157,25 @@ public interface CommandListener
+         // Default rethrow as a runtime exception.
+         throw throwable instanceof RuntimeException? (RuntimeException)throwable : new RuntimeException(throwable);
+     }
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand}
++     * catches a {@link java.lang.Throwable Throwable} <b>during execution</b>.
++     *
++     * <p>This doesn't account for exceptions thrown during other pre-checks,
++     * and should not be treated as such!
++     *
++     * The {@link java.lang.NullPointerException NullPointerException} thrown will not be caught by this method!
++     *
++     * @param  event
++     *         The CommandEvent that triggered the Command
++     * @param  command
++     *         The Command that was triggered
++     * @param  throwable
++     *         The Throwable thrown during Command execution
++     */
++    default void onSlashCommandException(SlashCommandEvent event, SlashCommand command, Throwable throwable) {
++        // Default rethrow as a runtime exception.
++        throw throwable instanceof RuntimeException? (RuntimeException)throwable : new RuntimeException(throwable);
++    }
+ }
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 new file mode 100644
-index 0000000..1e63795
+index 0000000..78737ec
 --- /dev/null
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
-@@ -0,0 +1,428 @@
+@@ -0,0 +1,425 @@
 +/*
 + * Copyright 2016-2018 John Grosh (jagrosh) & Kaidan Gustave (TheMonitorLizard)
 + *
@@ -506,16 +604,15 @@ index 0000000..1e63795
 +        } catch(Throwable t) {
 +            if(client.getListener() != null)
 +            {
-+                //client.getListener().onCommandException(event, this, t);
++                client.getListener().onSlashCommandException(event, this, t);
 +                return;
 +            }
 +            // otherwise we rethrow
 +            throw t;
 +        }
 +
-+        // TODO: this
-+        //if(client.getListener() != null)
-+            //client.getListener().onCompletedCommand(event, this);
++        if(client.getListener() != null)
++            client.getListener().onCompletedSlashCommand(event, this);
 +    }
 +
 +    /**
@@ -617,10 +714,8 @@ index 0000000..1e63795
 +    {
 +        if(message!=null)
 +            event.reply(message).setEphemeral(true).queue();
-+        /* To-Do I guess
 +        if(client.getListener()!=null)
-+            client.getListener().onTerminatedCommand(event, this);
-+         */
++            client.getListener().onTerminatedSlashCommand(event, this);
 +    }
 +
 +    /**
@@ -684,7 +779,7 @@ index 0000000..1e63795
 +    }
 +}
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
-index 5a5e7d2..81af25a 100644
+index 5a5e7d2..4c9a949 100644
 --- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
 @@ -28,9 +28,12 @@ import net.dv8tion.jda.api.events.ReadyEvent;
@@ -817,7 +912,7 @@ index 5a5e7d2..81af25a 100644
          sendStats(event.getJDA());
      }
  
-@@ -607,6 +674,29 @@ public class CommandClientImpl implements CommandClient, EventListener
+@@ -607,6 +674,25 @@ public class CommandClientImpl implements CommandClient, EventListener
              listener.onNonCommandMessage(event);
      }
  
@@ -832,16 +927,12 @@ index 5a5e7d2..81af25a 100644
 +
 +        if(command != null)
 +        {
-+            //if(listener != null)
-+            //    listener.onCommand(cevent, command);
++            if(listener != null)
++                listener.onSlashCommand(event, command);
 +            uses.put(command.getName(), uses.getOrDefault(command.getName(), 0) + 1);
 +            command.run(event, this);
-+            return; // Command is done
++            // Command is done
 +        }
-+
-+
-+        //if(listener != null)
-+        //    listener.onNonCommandMessage(event);
 +    }
 +
      private void sendStats(JDA jda)
