@@ -1,0 +1,1188 @@
+From 83629614a24ed83e51b3a26165f24f80e2db08a5 Mon Sep 17 00:00:00 2001
+From: Chew <chew@chew.pw>
+Date: Sun, 23 May 2021 17:46:44 -0500
+Subject: [PATCH] Slash command support
+
+
+diff --git a/build.gradle b/build.gradle
+index 3a2f282..f2e4331 100644
+--- a/build.gradle
++++ b/build.gradle
+@@ -35,7 +35,7 @@ allprojects {
+     version = versionInfo.values().join('.')
+ 
+     ext {
+-        jdaVersion = '4.2.1_255'
++        jdaVersion = '3846f8c'
+         slf4jVersion = '1.7.25'
+         okhttpVersion = '3.13.0'
+         findbugsVersion = '3.0.2'
+@@ -43,7 +43,7 @@ allprojects {
+         junitVersion = '4.13.1' // TODO Move to junit 5?
+ 
+         dependencies {
+-            jda = { [group: 'net.dv8tion', name: 'JDA', version: jdaVersion] }
++            jda = { [group: 'com.github.dv8fromtheworld', name: 'jda', version: jdaVersion] }
+             slf4j = { [group: 'org.slf4j', name: 'slf4j-api', version: slf4jVersion] }
+             okhttp = { [group: 'com.squareup.okhttp3', name: 'okhttp', version: okhttpVersion] }
+             findbugs = { [group: 'com.google.code.findbugs', name: 'jsr305', version: findbugsVersion] }
+@@ -89,7 +89,9 @@ allprojects {
+     }
+ 
+     repositories {
++        maven { url 'https://jitpack.io' }
+         mavenCentral()
++        mavenLocal()
+         maven {
+             name 'm2-dv8tion'
+             url 'https://m2.dv8tion.net/releases'
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+index d8186b1..16891b8 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/Command.java
+@@ -68,12 +68,15 @@ import net.dv8tion.jda.api.entities.VoiceChannel;
+ public abstract class Command
+ {
+     /**
+-     * The name of the command, allows the command to be called the format: {@code [prefix]<command name>}.
++     * The name of the command, allows the command to be called the formats: <br>
++     * Normal Command: {@code [prefix]<command name>}. <br>
++     * Slash Command: {@code /<command name>}
+      */
+     protected String name = "null";
+     
+     /**
+-     * A small help String that summarizes the function of the command, used in the default help builder.
++     * A small help String that summarizes the function of the command, used in the default help builder,
++     * and shown in the client for Slash Commands.
+      */
+     protected String help = "no help available";
+     
+@@ -85,6 +88,8 @@ public abstract class Command
+     
+     /**
+      * An arguments format String for the command, used in the default help builder.
++     * Not supported for SlashCommands.
++     * @see SlashCommand#options
+      */
+     protected String arguments = null;
+     
+@@ -102,7 +107,9 @@ public abstract class Command
+     
+     /**
+      * {@code true} if the command may only be used by a User with an ID matching the
+-     * Owners or any of the CoOwners.
++     * Owners or any of the CoOwners.<br>
++     * If enabled for a Slash Command, only owners (owner + up to 9 co-owners) will be added to the SlashCommand.
++     * All other permissions will be ignored.
+      * <br>Default {@code false}.
+      */
+     protected boolean ownerCommand = false;
+@@ -127,6 +134,7 @@ public abstract class Command
+     /**
+      * The aliases of the command, when calling a command these function identically to calling the
+      * {@link com.jagrosh.jdautilities.command.Command#name Command.name}.
++     * This options only works for normal commands, not slash commands.
+      */
+     protected String[] aliases = new String[0];
+     
+@@ -152,7 +160,8 @@ public abstract class Command
+ 
+     /**
+      * {@code true} if this command should be hidden from the help.
+-     * <br>Default {@code false}
++     * <br>Default {@code false}<br>
++     * <b>This has no effect for SlashCommands.</b>
+      */
+     protected boolean hidden = false;
+ 
+@@ -529,7 +538,7 @@ public abstract class Command
+     }
+     
+     /**
+-     * Checks whether or not this command should be hidden from the help
++     * Checks whether or not this command should be hidden from the help or disabled by default (SlashCommands)
+      *
+      * @return {@code true} if the command should be hidden, otherwise {@code false}
+      */
+@@ -692,6 +701,7 @@ public abstract class Command
+         
+         /**
+          * Runs a test of the provided {@link java.util.function.Predicate}.
++         * Does not support SlashCommands.
+          * 
+          * @param  event
+          *         The {@link com.jagrosh.jdautilities.command.CommandEvent CommandEvent}
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
+index f8db009..76627dd 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClient.java
+@@ -168,6 +168,63 @@ public interface CommandClient
+      */
+     void addCommand(Command command, int index);
+ 
++    /**
++     * Adds a single {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} to this CommandClient's
++     * registered SlashCommand.
++     *
++     * <p>For CommandClient's containing 20 commands or less, command calls by users will have the bot iterate
++     * through the entire {@link java.util.ArrayList ArrayList} to find the command called. As expected, this
++     * can get fairly hefty if a bot has a lot of Commands registered to it.
++     *
++     * <p>To prevent delay a CommandClient that has more that 20 Commands registered to it will begin to use
++     * <b>indexed calls</b>.
++     * <br>Indexed calls use a {@link java.util.HashMap HashMap} which links their
++     * {@link com.jagrosh.jdautilities.command.SlashCommand#name name} to the index that which they
++     * are located at in the ArrayList they are stored.
++     *
++     * <p>This means that all insertion and removal of SlashCommands must reorganize the index maintained by the HashMap.
++     * <br>For this particular insertion, the SlashCommand provided is inserted at the end of the index, meaning it will
++     * become the "rightmost" Command in the ArrayList.
++     *
++     * @param  command
++     *         The Command to add
++     *
++     * @throws java.lang.IllegalArgumentException
++     *         If the SlashCommand provided has a name or alias that has already been registered
++     */
++    void addSlashCommand(SlashCommand command);
++
++    /**
++     * Adds a single {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} to this CommandClient's
++     * registered Commands at the specified index.
++     *
++     * <p>For CommandClient's containing 20 commands or less, command calls by users will have the bot iterate
++     * through the entire {@link java.util.ArrayList ArrayList} to find the command called. As expected, this
++     * can get fairly hefty if a bot has a lot of Commands registered to it.
++     *
++     * <p>To prevent delay a CommandClient that has more that 20 Commands registered to it will begin to use
++     * <b>indexed calls</b>.
++     * <br>Indexed calls use a {@link java.util.HashMap HashMap} which links their
++     * {@link com.jagrosh.jdautilities.command.Command#name name} to the index that which they
++     * are located at in the ArrayList they are stored.
++     *
++     * <p>This means that all insertion and removal of Commands must reorganize the index maintained by the HashMap.
++     * <br>For this particular insertion, the Command provided is inserted at the index specified, meaning it will
++     * become the Command located at that index in the ArrayList. This will shift the Command previously located at
++     * that index as well as any located at greater indices, right one index ({@code size()+1}).
++     *
++     * @param  command
++     *         The Command to add
++     * @param  index
++     *         The index to add the Command at (must follow the specifications {@code 0<=index<=size()})
++     *
++     * @throws java.lang.ArrayIndexOutOfBoundsException
++     *         If {@code index < 0} or {@code index > size()}
++     * @throws java.lang.IllegalArgumentException
++     *         If the Command provided has a name or alias that has already been registered to an index
++     */
++    void addSlashCommand(SlashCommand command, int index);
++
+     /**
+      * Removes a single {@link com.jagrosh.jdautilities.command.Command Command} from this CommandClient's
+      * registered Commands at the index linked to the provided name/alias.
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+index 6d0e434..939e09b 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandClientBuilder.java
+@@ -54,6 +54,9 @@ public class CommandClientBuilder
+     private String carbonKey;
+     private String botsKey;
+     private final LinkedList<Command> commands = new LinkedList<>();
++    private final LinkedList<SlashCommand> slashCommands = new LinkedList<>();
++    private String forcedGuildId = null;
++    private boolean manualUpsert = false;
+     private CommandListener listener;
+     private boolean useHelp = true;
+     private boolean shutdownAutomatically = true;
+@@ -75,7 +78,7 @@ public class CommandClientBuilder
+     public CommandClient build()
+     {
+         CommandClient client = new CommandClientImpl(ownerId, coOwnerIds, prefix, altprefix, prefixes, prefixFunction, commandPreProcessFunction, activity, status, serverInvite,
+-                                                     success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), useHelp,
++                                                     success, warning, error, carbonKey, botsKey, new ArrayList<>(commands), new ArrayList<>(slashCommands), forcedGuildId, manualUpsert, useHelp,
+                                                      shutdownAutomatically, helpConsumer, helpWord, executor, linkedCacheSize, compiler, manager);
+         if(listener!=null)
+             client.setListener(listener);
+@@ -346,6 +349,66 @@ public class CommandClientBuilder
+         return this;
+     }
+ 
++    /**
++     * Adds a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} and registers it to the
++     * {@link com.jagrosh.jdautilities.command.impl.CommandClientImpl CommandClientImpl} for this session.
++     *
++     * @param  command
++     *         The SlashCommand to add
++     *
++     * @return This builder
++     */
++    public CommandClientBuilder addSlashCommand(SlashCommand command)
++    {
++        slashCommands.add(command);
++        return this;
++    }
++
++    /**
++     * Adds and registers multiple {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand}s to the
++     * {@link com.jagrosh.jdautilities.command.impl.CommandClientImpl CommandClientImpl} for this session.
++     * <br>This is the same as calling {@link com.jagrosh.jdautilities.command.CommandClientBuilder#addSlashCommand(SlashCommand)} multiple times.
++     *
++     * @param  commands
++     *         The Commands to add
++     *
++     * @return This builder
++     */
++    public CommandClientBuilder addSlashCommands(SlashCommand... commands)
++    {
++        for(SlashCommand command: commands)
++            this.addSlashCommand(command);
++        return this;
++    }
++
++    /**
++     * Forces Guild Only for SlashCommands.
++     * This is the same as setting this.guildOnly = true and this.guildId = your value for every command.
++     * Setting this to null disables the feature, but it is off by default.
++     *
++     * @param guildId the guild ID.
++     * @return This Builder
++     */
++    public CommandClientBuilder forceGuildOnly(String guildId)
++    {
++        this.forcedGuildId = guildId;
++        return this;
++    }
++
++    /**
++     * Whether or not to manually upsert slash commands.
++     * This is designed if you want to handle upserting, instead of doing it every boot.
++     * False by default.
++     *
++     * @param manualUpsert your option.
++     * @return This Builder
++     */
++    public CommandClientBuilder setManualUpsert(boolean manualUpsert)
++    {
++        this.manualUpsert = manualUpsert;
++        return this;
++    }
++
+     /**
+      * Adds an annotated command module to the
+      * {@link com.jagrosh.jdautilities.command.impl.CommandClientImpl CommandClientImpl} for this session.
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java b/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
+index f4658a8..ed93f17 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/CommandListener.java
+@@ -15,6 +15,7 @@
+  */
+ package com.jagrosh.jdautilities.command;
+ 
++import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+ 
+ /**
+@@ -35,6 +36,17 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent}.
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link com.jagrosh.jdautilities.command.Command Command} is triggered
+@@ -51,6 +63,22 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onCompletedCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent} after it's
++     * completed successfully.
++     *
++     * <p>Note that a <i>successfully</i> completed slash command is one that has not encountered
++     * an error or exception. Calls that do face errors should be handled by
++     * {@link CommandListener#onSlashCommandException(SlashCommandEvent, SlashCommand, Throwable) CommandListener#onSlashCommandException}
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onCompletedSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link com.jagrosh.jdautilities.command.Command Command} is triggered
+@@ -63,6 +91,18 @@ public interface CommandListener
+      *         The Command that was triggered
+      */
+     default void onTerminatedCommand(CommandEvent event, Command command) {}
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand Command} is triggered
++     * by a {@link net.dv8tion.jda.api.events.interaction.SlashCommandEvent SlashCommandEvent} but is
++     * terminated before completion.
++     *
++     * @param  event
++     *         The SlashCommandEvent that triggered the Command
++     * @param  command
++     *         The SlashCommand that was triggered
++     */
++    default void onTerminatedSlashCommand(SlashCommandEvent event, SlashCommand command) {}
+     
+     /**
+      * Called when a {@link net.dv8tion.jda.api.events.message.MessageReceivedEvent MessageReceivedEvent}
+@@ -117,4 +157,25 @@ public interface CommandListener
+         // Default rethrow as a runtime exception.
+         throw throwable instanceof RuntimeException? (RuntimeException)throwable : new RuntimeException(throwable);
+     }
++
++    /**
++     * Called when a {@link com.jagrosh.jdautilities.command.SlashCommand SlashCommand}
++     * catches a {@link java.lang.Throwable Throwable} <b>during execution</b>.
++     *
++     * <p>This doesn't account for exceptions thrown during other pre-checks,
++     * and should not be treated as such!
++     *
++     * The {@link java.lang.NullPointerException NullPointerException} thrown will not be caught by this method!
++     *
++     * @param  event
++     *         The CommandEvent that triggered the Command
++     * @param  command
++     *         The Command that was triggered
++     * @param  throwable
++     *         The Throwable thrown during Command execution
++     */
++    default void onSlashCommandException(SlashCommandEvent event, SlashCommand command, Throwable throwable) {
++        // Default rethrow as a runtime exception.
++        throw throwable instanceof RuntimeException? (RuntimeException)throwable : new RuntimeException(throwable);
++    }
+ }
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
+new file mode 100644
+index 0000000..fa196c9
+--- /dev/null
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
+@@ -0,0 +1,638 @@
++/*
++ * Copyright 2016-2018 John Grosh (jagrosh) & Kaidan Gustave (TheMonitorLizard)
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *     http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++package com.jagrosh.jdautilities.command;
++
++import net.dv8tion.jda.api.Permission;
++import net.dv8tion.jda.api.entities.ChannelType;
++import net.dv8tion.jda.api.entities.GuildVoiceState;
++import net.dv8tion.jda.api.entities.Member;
++import net.dv8tion.jda.api.entities.VoiceChannel;
++import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
++import net.dv8tion.jda.api.interactions.commands.build.CommandData;
++import net.dv8tion.jda.api.interactions.commands.build.OptionData;
++import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
++import net.dv8tion.jda.api.interactions.commands.build.SubcommandGroupData;
++import net.dv8tion.jda.api.interactions.commands.privileges.CommandPrivilege;
++import org.jetbrains.annotations.Nullable;
++
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++/**
++ * <h1><b>Slash Commands In JDA-Chewtils</b></h1>
++ * 
++ * <p>This intends to mimic the {@link Command command} with minimal breaking changes,
++ * to make migration easy and smooth.</p>
++ * <p>Breaking changes are documented here: https://github.</p>
++ * {@link SlashCommand#execute(SlashCommandEvent) #execute(CommandEvent)} body:
++ * 
++ * <pre><code> public class ExampleCmd extends Command {
++ *      
++ *      public ExampleCmd() {
++ *          this.name = "example";
++ *          this.help = "gives an example of commands do";
++ *      }
++ *      
++ *      {@literal @Override}
++ *      protected void execute(SlashCommandEvent event) {
++ *          event.reply("Hey look! This would be the bot's reply if this was a command!").queue();
++ *      }
++ *      
++ * }</code></pre>
++ * 
++ * Execution is with the provision of the SlashCommandEvent is performed in two steps:
++ * <ul>
++ *     <li>{@link SlashCommand#run(SlashCommandEvent, CommandClient) run} - The command runs
++ *     through a series of conditionals, automatically terminating the command instance if one is not met, 
++ *     and possibly providing an error response.</li>
++ *     
++ *     <li>{@link SlashCommand#execute(SlashCommandEvent) execute} - The command,
++ *     now being cleared to run, executes and performs whatever lies in the abstract body method.</li>
++ * </ul>
++ * 
++ * @author John Grosh (jagrosh)
++ */
++public abstract class SlashCommand extends Command
++{
++    /**
++     * This option is deprecated in favor of {@link #enabledRoles}
++     * Please replace this with this.enabledRoles = new String[]{Roles};
++     * While this check is still done, it's better to let Discord do the work.<br>
++     * This deprecation can be ignored if you intend to support normal and slash commands.
++     */
++    @Deprecated
++    protected String requiredRole = null;
++
++    /**
++     * The list of role IDs who can use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.<br>
++     * This is useless if {@link #defaultEnabled} isn't false.
++     */
++    protected String[] enabledRoles = new String[]{};
++
++    /**
++     * The list of user IDs who can use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.<br>
++     * This is useless if {@link #defaultEnabled} isn't false.
++     */
++    protected String[] enabledUsers = new String[]{};
++
++    /**
++     * The list of role IDs who cannot use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.<br>
++     * This is useless if {@link #defaultEnabled} isn't true.
++     */
++    protected String[] disabledRoles = new String[]{};
++
++    /**
++     * The list of user IDs who cannot use this Slash Command.
++     * Because command privileges are restricted to a Guild, these will not take effect for Global commands.<br>
++     * This is useless if {@link #defaultEnabled} isn't true.
++     */
++    protected String[] disabledUsers = new String[]{};
++
++    /**
++     * Whether or not this command is disabled by default.
++     * If disabled, you must give yourself permission to use it.<br>
++     * In order for {@link #enabledUsers} and {@link #enabledRoles} to work, this must be set to false.
++     * @see net.dv8tion.jda.api.requests.restaction.CommandCreateAction#setDefaultEnabled(boolean)
++     * @see SlashCommand#enabledRoles
++     * @see SlashCommand#enabledUsers
++     */
++    protected boolean defaultEnabled = true;
++
++    /**
++     * The child commands of the command. These are used in the format {@code /<parent name>
++     * <child name>}.
++     * This is synonymous with sub commands. Additionally, sub-commands cannot have children.<br>
++     */
++    protected SlashCommand[] children = new SlashCommand[0];
++
++    /**
++     * The ID of the server you want guildOnly tied to.
++     * This means the slash command will only work and show up in the specified Guild.
++     * If this is null, guildOnly will still be processed, however an ephemeral message will be sent telling them to move.
++     */
++    protected String guildId = null;
++
++    /**
++     * The subcommand/child group this is associated with.
++     * Will be in format {@code /<parent name> <subcommandGroup name> <subcommand name>}.
++     *
++     * <b>This only works in a child/subcommand.</b>
++     *
++     * To instantiate: <code>{@literal new SubcommandGroupData(name, description)}</code><br>
++     * It's important the instantiations are the same across children if you intend to keep them in the same group.
++     *
++     * Can be null, and it will not be assigned to a group.
++     */
++    protected SubcommandGroupData subcommandGroup = null;
++
++    /**
++     * An array list of OptionData.
++     *
++     * <b>This is incompatible with children. You cannot have a child AND options.</b>
++     *
++     * This is to specify different options for arguments and the stuff.
++     *
++     * For example, to add an argument for "input", you can do this:<br>
++     * <pre><code>
++     *     OptionData data = new OptionData(OptionType.STRING, "input", "The input for the command").setRequired(true);
++     *    {@literal List<OptionData> dataList = new ArrayList<>();}
++     *     dataList.add(data);
++     *     this.options = dataList;</code></pre>
++     */
++    protected List<OptionData> options = new ArrayList<>();
++
++    /**
++     * The command client to be retrieved if needed.
++     */
++    protected CommandClient client;
++    
++    /**
++     * The main body method of a {@link SlashCommand SlashCommand}.
++     * <br>This is the "response" for a successful 
++     * {@link SlashCommand#run(SlashCommandEvent, CommandClient) #run(CommandEvent)}.
++     * 
++     * @param  event
++     *         The {@link SlashCommandEvent SlashCommandEvent} that
++     *         triggered this Command
++     */
++    protected abstract void execute(SlashCommandEvent event);
++
++    /**
++     * The main body method of a {@link com.jagrosh.jdautilities.command.Command Command}.
++     * <br>This is the "response" for a successful
++     * {@link com.jagrosh.jdautilities.command.Command#run(CommandEvent) #run(CommandEvent)}.
++     * <b>
++     *     Because this is a SlashCommand, this is called, but does nothing.
++     *     You can still override this if you want to have a separate response for normal [prefix][name].
++     *     Keep in mind you must add it as a Command via {@link CommandClientBuilder#addCommand(Command)} for it to work properly.
++     * </b>
++     *
++     * @param  event
++     *         The {@link com.jagrosh.jdautilities.command.CommandEvent CommandEvent} that
++     *         triggered this Command
++     */
++    @Override
++    protected void execute(CommandEvent event) {}
++    
++    /**
++     * Runs checks for the {@link SlashCommand SlashCommand} with the
++     * given {@link SlashCommandEvent SlashCommandEvent} that called it.
++     * <br>Will terminate, and possibly respond with a failure message, if any checks fail.
++     * 
++     * @param  event
++     *         The SlashCommandEvent that triggered this Command
++     * @param  client
++     *         The CommandClient for checks and stuff
++     */
++    public final void run(SlashCommandEvent event, CommandClient client)
++    {
++        // set the client
++        this.client = client;
++
++        // child check
++        if(event.getSubcommandName() != null)
++        {
++            for(SlashCommand cmd: children)
++            {
++                if(cmd.isCommandFor(event.getSubcommandName()))
++                {
++                    cmd.run(event, client);
++                    return;
++                }
++            }
++        }
++
++        // owner check
++        if(ownerCommand && !(isOwner(event, client)))
++        {
++            terminate(event,"Only an owner may run this command. Sorry.", client);
++            return;
++        }
++
++        // is allowed check
++        if((event.getChannelType() == ChannelType.TEXT) && !isAllowed(event.getTextChannel()))
++        {
++            terminate(event, "That command cannot be used in this channel!", client);
++            return;
++        }
++        
++        // required role check
++        if(requiredRole!=null)
++            if(!(event.getChannelType() == ChannelType.TEXT) || event.getMember().getRoles().stream().noneMatch(r -> r.getName().equalsIgnoreCase(requiredRole)))
++            {
++                terminate(event, client.getError()+" You must have a role called `"+requiredRole+"` to use that!", client);
++                return;
++            }
++        
++        // availability check
++        if(event.getChannelType()==ChannelType.TEXT)
++        {
++            //user perms
++            for(Permission p: userPermissions)
++            {
++                if(p.isChannel())
++                {
++                    if(!event.getMember().hasPermission(event.getTextChannel(), p))
++                    {
++                        terminate(event, String.format(userMissingPermMessage, client.getError(), p.getName(), "channel"), client);
++                        return;
++                    }
++                }
++                else
++                {
++                    if(!event.getMember().hasPermission(p))
++                    {
++                        terminate(event, String.format(userMissingPermMessage, client.getError(), p.getName(), "server"), client);
++                        return;
++                    }
++                }
++            }
++
++            // bot perms
++            for(Permission p: botPermissions)
++            {
++                Member selfMember = event.getGuild() == null ? null : event.getGuild().getSelfMember();
++                if(p.isChannel())
++                {
++                    if(p.name().startsWith("VOICE"))
++                    {
++                        GuildVoiceState gvc = event.getMember().getVoiceState();
++                        VoiceChannel vc = gvc == null ? null : gvc.getChannel();
++                        if(vc==null)
++                        {
++                            terminate(event, client.getError()+" You must be in a voice channel to use that!", client);
++                            return;
++                        }
++                        else if(!selfMember.hasPermission(vc, p))
++                        {
++                            terminate(event, String.format(botMissingPermMessage, client.getError(), p.getName(), "voice channel"), client);
++                            return;
++                        }
++                    }
++                    else
++                    {
++                        if(!selfMember.hasPermission(event.getTextChannel(), p))
++                        {
++                            terminate(event, String.format(botMissingPermMessage, client.getError(), p.getName(), "channel"), client);
++                            return;
++                        }
++                    }
++                }
++                else
++                {
++                    if(!selfMember.hasPermission(p))
++                    {
++                        terminate(event, String.format(botMissingPermMessage, client.getError(), p.getName(), "server"), client);
++                        return;
++                    }
++                }
++            }
++        }
++        else if(guildOnly)
++        {
++            terminate(event, client.getError()+" This command cannot be used in direct messages", client);
++            return;
++        }
++        
++        // cooldown check, ignoring owner
++        if(cooldown>0 && !(isOwner(event, client)))
++        {
++            String key = getCooldownKey(event);
++            int remaining = client.getRemainingCooldown(key);
++            if(remaining>0)
++            {
++                terminate(event, getCooldownError(event, remaining, client), client);
++                return;
++            }
++            else client.applyCooldown(key, cooldown);
++        }
++        
++        // run
++        try {
++            execute(event);
++        } catch(Throwable t) {
++            if(client.getListener() != null)
++            {
++                client.getListener().onSlashCommandException(event, this, t);
++                return;
++            }
++            // otherwise we rethrow
++            throw t;
++        }
++
++        if(client.getListener() != null)
++            client.getListener().onCompletedSlashCommand(event, this);
++    }
++
++    /**
++     * Tests whether or not the {@link net.dv8tion.jda.api.entities.User User} who triggered this
++     * event is an owner of the bot.
++     *
++     * @param event the event that triggered the command
++     * @param client the command client for checking stuff
++     * @return {@code true} if the User is the Owner, else {@code false}
++     */
++    public boolean isOwner(SlashCommandEvent event, CommandClient client)
++    {
++        if(event.getUser().getId().equals(client.getOwnerId()))
++            return true;
++        if(client.getCoOwnerIds()==null)
++            return false;
++        for(String id : client.getCoOwnerIds())
++            if(id.equals(event.getUser().getId()))
++                return true;
++        return false;
++    }
++
++    /**
++     * Gets the CommandClient.
++     *
++     * @return the CommandClient.
++     */
++    public CommandClient getClient()
++    {
++        return client;
++    }
++
++    /**
++     * Gets the associated Guild ID for Guild Only command.
++     *
++     * @return the ID for the specific Guild
++     */
++    public String getGuildId()
++    {
++        return guildId;
++    }
++
++    /**
++     * Gets the enabled roles for this Slash Command.
++     * A user MUST have a role for a command to be ran.
++     *
++     * @return a list of String role IDs
++     */
++    public String[] getEnabledRoles()
++    {
++        return enabledRoles;
++    }
++
++    /**
++     * Gets the enabled users for this Slash Command.
++     * A user with an ID in this list is required for the command to be ran.
++     *
++     * @return a list of String user IDs
++     */
++    public String[] getEnabledUsers()
++    {
++        return enabledUsers;
++    }
++
++    /**
++     * Gets the disabled roles for this Slash Command.
++     * A user with this role may not run this command.
++     *
++     * @return a list of String role IDs
++     */
++    public String[] getDisabledRoles()
++    {
++        return disabledRoles;
++    }
++
++    /**
++     * Gets the disabled users for this Slash Command.
++     * Uses in this list may not run this command.
++     *
++     * @return a list of String user IDs
++     */
++    public String[] getDisabledUsers()
++    {
++        return disabledUsers;
++    }
++
++    /**
++     * Whether or not this command is enabled by default.
++     * If disabled by default, you MUST enable {@link #enabledRoles roles}
++     * or {@link #enabledUsers users} to access it.
++     * This does NOT hide it, it simply appears greyed out.
++     *
++     * @return a list of String user IDs
++     */
++    public boolean isDefaultEnabled()
++    {
++        return defaultEnabled;
++    }
++
++    /**
++     * Gets the subcommand data associated with this subcommand.
++     *
++     * @return subcommand data
++     */
++    public SubcommandGroupData getSubcommandGroup()
++    {
++        return subcommandGroup;
++    }
++
++    /**
++     * Gets the options associated with this command.
++     *
++     * @return the OptionData array for options
++     */
++    public List<OptionData> getOptions()
++    {
++        return options;
++    }
++
++    /**
++     * Builds CommandData for the SlashCommand upsert.
++     * This code is executed when we need to upsert the command.
++     *
++     * Useful for manual upserting.
++     *
++     * @return the built command data
++     */
++    public CommandData buildCommandData()
++    {
++        // Make the command data
++        CommandData data = new CommandData(getName(), getHelp());
++        if (!getOptions().isEmpty())
++        {
++            data.addOptions(getOptions());
++        }
++        // Check for children
++        if (children.length != 0)
++        {
++            // Temporary map for easy group storage
++            Map<String, SubcommandGroupData> groupData = new HashMap<>();
++            for (SlashCommand child : children)
++            {
++                // Create subcommand data
++                SubcommandData subcommandData = new SubcommandData(child.getName(), child.getHelp());
++                // Add options
++                if (!child.getOptions().isEmpty())
++                {
++                    subcommandData.addOptions(child.getOptions());
++                }
++
++                // If there's a subcommand group
++                if (child.getSubcommandGroup() != null)
++                {
++                    SubcommandGroupData group = child.getSubcommandGroup();
++
++                    SubcommandGroupData newData = groupData.getOrDefault(group.getName(), group)
++                        .addSubcommands(subcommandData);
++
++                    groupData.put(group.getName(), newData);
++                }
++                // Just add to the command
++                else
++                {
++                    data.addSubcommands(subcommandData);
++                }
++            }
++            if (!groupData.isEmpty())
++                data.addSubcommandGroups(groupData.values());
++        }
++
++        // Default enabled is synonymous with hidden now.
++        data.setDefaultEnabled(isDefaultEnabled());
++
++        return data;
++    }
++
++    /**
++     * Builds CommandPrivilege for the SlashCommand permissions.
++     * This code is executed after upsertion to update the permissions.
++     * <br>
++     * <b>The max amount of privilege is 10, keep this in mind.</b>
++     *
++     * Useful for manual upserting.
++     *
++     * @param client the command client for owner checking.
++     *               if null, owner checks won't be performed
++     * @return the built privilege data
++     */
++    public List<CommandPrivilege> buildPrivileges(@Nullable CommandClient client)
++    {
++        List<CommandPrivilege> privileges = new ArrayList<>();
++        // Privilege Checks
++        for (String role : getEnabledRoles())
++            privileges.add(CommandPrivilege.enableRole(role));
++        for (String user : getEnabledUsers())
++            privileges.add(CommandPrivilege.enableUser(user));
++        for (String role : getDisabledRoles())
++            privileges.add(CommandPrivilege.disableRole(role));
++        for (String user : getDisabledUsers())
++            privileges.add(CommandPrivilege.disableUser(user));
++        // Co/Owner checks
++        if (isOwnerCommand() && client != null)
++        {
++            // Clear array, we have the priority here.
++            privileges.clear();
++            // Add owner
++            privileges.add(CommandPrivilege.enableUser(client.getOwnerId()));
++            // Add co-owners
++            for (String user : client.getCoOwnerIds())
++                privileges.add(CommandPrivilege.enableUser(user));
++        }
++
++        if (privileges.size() > 10)
++            privileges = privileges.subList(0, 10);
++
++        return privileges;
++    }
++
++    /**
++     * Gets the {@link SlashCommand#children Command.children} for the Command.
++     *
++     * @return The children for the Command
++     */
++    public SlashCommand[] getChildren()
++    {
++        return children;
++    }
++
++    private void terminate(SlashCommandEvent event, String message, CommandClient client)
++    {
++        if(message!=null)
++            event.reply(message).setEphemeral(true).queue();
++        if(client.getListener()!=null)
++            client.getListener().onTerminatedSlashCommand(event, this);
++    }
++
++    /**
++     * Gets the proper cooldown key for this Command under the provided
++     * {@link SlashCommandEvent SlashCommandEvent}.
++     *
++     * @param  event
++     *         The CommandEvent to generate the cooldown for.
++     *
++     * @return A String key to use when applying a cooldown.
++     */
++    public String getCooldownKey(SlashCommandEvent event)
++    {
++        switch (cooldownScope)
++        {
++            case USER:         return cooldownScope.genKey(name,event.getUser().getIdLong());
++            case USER_GUILD:   return event.getGuild()!=null ? cooldownScope.genKey(name,event.getUser().getIdLong(),event.getGuild().getIdLong()) :
++                    CooldownScope.USER_CHANNEL.genKey(name,event.getUser().getIdLong(), event.getChannel().getIdLong());
++            case USER_CHANNEL: return cooldownScope.genKey(name,event.getUser().getIdLong(),event.getChannel().getIdLong());
++            case GUILD:        return event.getGuild()!=null ? cooldownScope.genKey(name,event.getGuild().getIdLong()) :
++                    CooldownScope.CHANNEL.genKey(name,event.getChannel().getIdLong());
++            case CHANNEL:      return cooldownScope.genKey(name,event.getChannel().getIdLong());
++            case SHARD:
++                event.getJDA().getShardInfo();
++                return cooldownScope.genKey(name, event.getJDA().getShardInfo().getShardId());
++            case USER_SHARD:
++                event.getJDA().getShardInfo();
++                return cooldownScope.genKey(name,event.getUser().getIdLong(),event.getJDA().getShardInfo().getShardId());
++            case GLOBAL:       return cooldownScope.genKey(name, 0);
++            default:           return "";
++        }
++    }
++
++    /**
++     * Gets an error message for this Command under the provided
++     * {@link SlashCommandEvent SlashCommandEvent}.
++     *
++     * @param  event
++     *         The CommandEvent to generate the error message for.
++     * @param  remaining
++     *         The remaining number of seconds a command is on cooldown for.
++     * @param client
++     *         The CommandClient for checking stuff
++     *
++     * @return A String error message for this command if {@code remaining > 0},
++     *         else {@code null}.
++     */
++    public String getCooldownError(SlashCommandEvent event, int remaining, CommandClient client)
++    {
++        if(remaining<=0)
++            return null;
++        String front = client.getWarning()+" That command is on cooldown for "+remaining+" more seconds";
++        if(cooldownScope.equals(CooldownScope.USER))
++            return front+"!";
++        else if(cooldownScope.equals(CooldownScope.USER_GUILD) && event.getGuild()==null)
++            return front+" "+ CooldownScope.USER_CHANNEL.errorSpecification+"!";
++        else if(cooldownScope.equals(CooldownScope.GUILD) && event.getGuild()==null)
++            return front+" "+ CooldownScope.CHANNEL.errorSpecification+"!";
++        else
++            return front+" "+cooldownScope.errorSpecification+"!";
++    }
++}
+diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+index 5a5e7d2..9ded2f3 100644
+--- a/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
++++ b/command/src/main/java/com/jagrosh/jdautilities/command/impl/CommandClientImpl.java
+@@ -28,9 +28,12 @@ import net.dv8tion.jda.api.events.ReadyEvent;
+ import net.dv8tion.jda.api.events.ShutdownEvent;
+ import net.dv8tion.jda.api.events.guild.GuildJoinEvent;
+ import net.dv8tion.jda.api.events.guild.GuildLeaveEvent;
++import net.dv8tion.jda.api.events.interaction.SlashCommandEvent;
+ import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
+ import net.dv8tion.jda.api.events.message.guild.GuildMessageDeleteEvent;
+ import net.dv8tion.jda.api.hooks.EventListener;
++import net.dv8tion.jda.api.interactions.commands.build.CommandData;
++import net.dv8tion.jda.api.interactions.commands.privileges.CommandPrivilege;
+ import net.dv8tion.jda.internal.utils.Checks;
+ import okhttp3.*;
+ import org.json.JSONObject;
+@@ -78,7 +81,12 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private final Function<MessageReceivedEvent, Boolean> commandPreProcessFunction;
+     private final String serverInvite;
+     private final HashMap<String, Integer> commandIndex;
++    private final HashMap<String, Integer> slashCommandIndex;
+     private final ArrayList<Command> commands;
++    private final ArrayList<SlashCommand> slashCommands;
++    private final ArrayList<String> slashCommandIds;
++    private final String forcedGuildId;
++    private final boolean manualUpsert;
+     private final String success;
+     private final String warning;
+     private final String error;
+@@ -99,7 +107,7 @@ public class CommandClientImpl implements CommandClient, EventListener
+     private int totalGuilds;
+ 
+     public CommandClientImpl(String ownerId, String[] coOwnerIds, String prefix, String altprefix, String[] prefixes, Function<MessageReceivedEvent, String> prefixFunction, Function<MessageReceivedEvent, Boolean> commandPreProcessFunction, Activity activity, OnlineStatus status, String serverInvite,
+-                             String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands,
++                             String success, String warning, String error, String carbonKey, String botsKey, ArrayList<Command> commands, ArrayList<SlashCommand> slashCommands, String forcedGuildId, boolean manualUpsert,
+                              boolean useHelp, boolean shutdownAutomatically, Consumer<CommandEvent> helpConsumer, String helpWord, ScheduledExecutorService executor,
+                              int linkedCacheSize, AnnotatedModuleCompiler compiler, GuildSettingsManager manager)
+     {
+@@ -136,7 +144,12 @@ public class CommandClientImpl implements CommandClient, EventListener
+         this.carbonKey = carbonKey;
+         this.botsKey = botsKey;
+         this.commandIndex = new HashMap<>();
++        this.slashCommandIndex = new HashMap<>();
+         this.commands = new ArrayList<>();
++        this.slashCommands = new ArrayList<>();
++        this.slashCommandIds = new ArrayList<>();
++        this.forcedGuildId = forcedGuildId;
++        this.manualUpsert = manualUpsert;
+         this.cooldowns = new HashMap<>();
+         this.uses = new HashMap<>();
+         this.linkMap = linkedCacheSize>0 ? new FixedSizeCache<>(linkedCacheSize) : null;
+@@ -182,6 +195,12 @@ public class CommandClientImpl implements CommandClient, EventListener
+         {
+             addCommand(command);
+         }
++
++        // Load slash commands
++        for(SlashCommand command : slashCommands)
++        {
++            addSlashCommand(command);
++        }
+     }
+ 
+     @Override
+@@ -292,6 +311,35 @@ public class CommandClientImpl implements CommandClient, EventListener
+         commands.add(index,command);
+     }
+ 
++    @Override
++    public void addSlashCommand(SlashCommand command)
++    {
++        addSlashCommand(command, slashCommands.size());
++    }
++
++    @Override
++    public void addSlashCommand(SlashCommand command, int index)
++    {
++        if(index>slashCommands.size() || index<0)
++            throw new ArrayIndexOutOfBoundsException("Index specified is invalid: ["+index+"/"+slashCommands.size()+"]");
++        synchronized(slashCommandIndex)
++        {
++            String name = command.getName().toLowerCase();
++            //check for collision
++            if(slashCommandIndex.containsKey(name))
++                throw new IllegalArgumentException("Command added has a name that has already been indexed: \""+name+"\"!");
++            //shift if not append
++            if(index<slashCommands.size())
++            {
++                slashCommandIndex.entrySet().stream().filter(entry -> entry.getValue()>=index).collect(Collectors.toList())
++                    .forEach(entry -> slashCommandIndex.put(entry.getKey(), entry.getValue()+1));
++            }
++            //add
++            slashCommandIndex.put(name, index);
++        }
++        slashCommands.add(index,command);
++    }
++
+     @Override
+     public void removeCommand(String name)
+     {
+@@ -461,6 +509,9 @@ public class CommandClientImpl implements CommandClient, EventListener
+         if(event instanceof MessageReceivedEvent)
+             onMessageReceived((MessageReceivedEvent)event);
+ 
++        else if(event instanceof SlashCommandEvent)
++            onSlashCommand((SlashCommandEvent)event);
++
+         else if(event instanceof GuildMessageDeleteEvent && usesLinkedDeletion())
+             onMessageDelete((GuildMessageDeleteEvent) event);
+ 
+@@ -498,6 +549,32 @@ public class CommandClientImpl implements CommandClient, EventListener
+         if(manager != null)
+             manager.init();
+ 
++        // Upsert slash commands, if not manual
++        if (!manualUpsert)
++        {
++            for (SlashCommand command : slashCommands)
++            {
++                CommandData data = command.buildCommandData();
++
++                if (forcedGuildId != null || (command.isGuildOnly() && command.getGuildId() != null)) {
++                    String guildId = forcedGuildId != null ? forcedGuildId : command.getGuildId();
++                    Guild guild = event.getJDA().getGuildById(guildId);
++                    if (guild == null) {
++                        LOG.error("Could not find guild with specified ID: " + forcedGuildId + ". Not going to upsert.");
++                        continue;
++                    }
++                    List<CommandPrivilege> privileges = command.buildPrivileges(this);
++                    guild.upsertCommand(data).queue(command1 -> {
++                        slashCommandIds.add(command1.getId());
++                        if (!privileges.isEmpty())
++                            command1.updatePrivileges(guild, privileges).queue();
++                    });
++                } else {
++                    event.getJDA().upsertCommand(data).queue(command1 -> slashCommandIds.add(command1.getId()));
++                }
++            }
++        }
++
+         sendStats(event.getJDA());
+     }
+ 
+@@ -607,6 +684,25 @@ public class CommandClientImpl implements CommandClient, EventListener
+             listener.onNonCommandMessage(event);
+     }
+ 
++    private void onSlashCommand(SlashCommandEvent event)
++    {
++        final SlashCommand command; // this will be null if it's not a command
++        synchronized(slashCommandIndex)
++        {
++            int i = slashCommandIndex.getOrDefault(event.getName().toLowerCase(), -1);
++            command = i != -1? slashCommands.get(i) : null;
++        }
++
++        if(command != null)
++        {
++            if(listener != null)
++                listener.onSlashCommand(event, command);
++            uses.put(command.getName(), uses.getOrDefault(command.getName(), 0) + 1);
++            command.run(event, this);
++            // Command is done
++        }
++    }
++
+     private void sendStats(JDA jda)
+     {
+         OkHttpClient client = jda.getHttpClient();
+-- 
+2.30.1
+
