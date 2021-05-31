@@ -1,11 +1,11 @@
-From 2aae07b34d87ae911da46a74e5ec9d7a5fad85df Mon Sep 17 00:00:00 2001
+From 19e8ab8429d140ae59ddcd12f20854908ce8640a Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
 
 
 diff --git a/build.gradle b/build.gradle
-index 3a2f282..0838420 100644
+index 3a2f282..f2e4331 100644
 --- a/build.gradle
 +++ b/build.gradle
 @@ -35,7 +35,7 @@ allprojects {
@@ -13,7 +13,7 @@ index 3a2f282..0838420 100644
  
      ext {
 -        jdaVersion = '4.2.1_255'
-+        jdaVersion = '757de9be45'
++        jdaVersion = '3846f8c'
          slf4jVersion = '1.7.25'
          okhttpVersion = '3.13.0'
          findbugsVersion = '3.0.2'
@@ -371,10 +371,10 @@ index f4658a8..ed93f17 100644
  }
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 new file mode 100644
-index 0000000..9f1ecea
+index 0000000..cb80ade
 --- /dev/null
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
-@@ -0,0 +1,573 @@
+@@ -0,0 +1,638 @@
 +/*
 + * Copyright 2016-2018 John Grosh (jagrosh) & Kaidan Gustave (TheMonitorLizard)
 + *
@@ -401,11 +401,14 @@ index 0000000..9f1ecea
 +import net.dv8tion.jda.api.interactions.commands.build.CommandData;
 +import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 +import net.dv8tion.jda.api.interactions.commands.build.SubcommandData;
++import net.dv8tion.jda.api.interactions.commands.build.SubcommandGroupData;
 +import net.dv8tion.jda.api.interactions.commands.privileges.CommandPrivilege;
 +import org.jetbrains.annotations.Nullable;
 +
 +import java.util.ArrayList;
++import java.util.HashMap;
 +import java.util.List;
++import java.util.Map;
 +
 +/**
 + * <h1><b>Slash Commands In JDA-Chewtils</b></h1>
@@ -446,7 +449,8 @@ index 0000000..9f1ecea
 +    /**
 +     * This option is deprecated in favor of {@link #enabledRoles}
 +     * Please replace this with this.enabledRoles = new String[]{Roles};
-+     * While this check is still done, it's better to let Discord do the work.
++     * While this check is still done, it's better to let Discord do the work.<br>
++     * This deprecation can be ignored if you intend to support normal and slash commands.
 +     */
 +    @Deprecated
 +    protected String requiredRole = null;
@@ -492,6 +496,7 @@ index 0000000..9f1ecea
 +    /**
 +     * The child commands of the command. These are used in the format {@code /<parent name>
 +     * <child name>}.
++     * This is synonymous with sub commands. Additionally, sub-commands cannot have children.<br>
 +     */
 +    protected SlashCommand[] children = new SlashCommand[0];
 +
@@ -503,7 +508,22 @@ index 0000000..9f1ecea
 +    protected String guildId = null;
 +
 +    /**
++     * The subcommand/child group this is associated with.
++     * Will be in format {@code /<parent name> <subcommandGroup name> <subcommand name>}.
++     *
++     * <b>This only works in a child/subcommand.</b>
++     *
++     * To instantiate: <code>{@literal new SubcommandGroupData(name, description)}</code><br>
++     * It's important the instantiations are the same across children if you intend to keep them in the same group.
++     *
++     * Can be null, and it will not be assigned to a group.
++     */
++    protected SubcommandGroupData subcommandGroup = null;
++
++    /**
 +     * An array list of OptionData.
++     *
++     * <b>This is incompatible with children. You cannot have a child AND options.</b>
 +     *
 +     * This is to specify different options for arguments and the stuff.
 +     *
@@ -563,6 +583,19 @@ index 0000000..9f1ecea
 +    {
 +        // set the client
 +        this.client = client;
++
++        // child check
++        if(event.getSubcommandName() != null)
++        {
++            for(SlashCommand cmd: children)
++            {
++                if(cmd.isCommandFor(event.getSubcommandName()))
++                {
++                    cmd.run(event, client);
++                    return;
++                }
++            }
++        }
 +
 +        // owner check
 +        if(ownerCommand && !(isOwner(event, client)))
@@ -770,7 +803,6 @@ index 0000000..9f1ecea
 +        return disabledUsers;
 +    }
 +
-+
 +    /**
 +     * Whether or not this command is enabled by default.
 +     * If disabled by default, you MUST enable {@link #enabledRoles roles}
@@ -782,6 +814,16 @@ index 0000000..9f1ecea
 +    public boolean isDefaultEnabled()
 +    {
 +        return defaultEnabled;
++    }
++
++    /**
++     * Gets the subcommand data associated with this subcommand.
++     *
++     * @return subcommand data
++     */
++    public SubcommandGroupData getSubcommandGroup()
++    {
++        return subcommandGroup;
 +    }
 +
 +    /**
@@ -804,22 +846,45 @@ index 0000000..9f1ecea
 +     */
 +    public CommandData buildCommandData()
 +    {
++        // Make the command data
 +        CommandData data = new CommandData(getName(), getHelp());
 +        if (!getOptions().isEmpty())
 +        {
 +            data.addOptions(getOptions());
 +        }
++        // Check for children
 +        if (children.length != 0)
 +        {
++            // Temporary map for easy group storage
++            Map<String, SubcommandGroupData> groupData = new HashMap<>();
 +            for (SlashCommand child : children)
 +            {
++                // Create subcommand data
 +                SubcommandData subcommandData = new SubcommandData(child.getName(), child.getHelp());
++                // Add options
 +                if (!getOptions().isEmpty())
 +                {
 +                    subcommandData.addOptions(child.getOptions());
 +                }
-+                data.addSubcommands(subcommandData);
++
++                // If there's a subcommand group
++                if (child.getSubcommandGroup() != null)
++                {
++                    SubcommandGroupData group = child.getSubcommandGroup();
++
++                    SubcommandGroupData newData = groupData.getOrDefault(group.getName(), group)
++                        .addSubcommands(subcommandData);
++
++                    groupData.put(group.getName(), newData);
++                }
++                // Just add to the command
++                else
++                {
++                    data.addSubcommands(subcommandData);
++                }
 +            }
++            if (!groupData.isEmpty())
++                data.addSubcommandGroups(groupData.values());
 +        }
 +
 +        // Default enabled is synonymous with hidden now.
