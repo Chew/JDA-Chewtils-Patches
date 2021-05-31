@@ -1,4 +1,4 @@
-From 19e8ab8429d140ae59ddcd12f20854908ce8640a Mon Sep 17 00:00:00 2001
+From 83629614a24ed83e51b3a26165f24f80e2db08a5 Mon Sep 17 00:00:00 2001
 From: Chew <chew@chew.pw>
 Date: Sun, 23 May 2021 17:46:44 -0500
 Subject: [PATCH] Slash command support
@@ -371,7 +371,7 @@ index f4658a8..ed93f17 100644
  }
 diff --git a/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 new file mode 100644
-index 0000000..cb80ade
+index 0000000..fa196c9
 --- /dev/null
 +++ b/command/src/main/java/com/jagrosh/jdautilities/command/SlashCommand.java
 @@ -0,0 +1,638 @@
@@ -862,7 +862,7 @@ index 0000000..cb80ade
 +                // Create subcommand data
 +                SubcommandData subcommandData = new SubcommandData(child.getName(), child.getHelp());
 +                // Add options
-+                if (!getOptions().isEmpty())
++                if (!child.getOptions().isEmpty())
 +                {
 +                    subcommandData.addOptions(child.getOptions());
 +                }
